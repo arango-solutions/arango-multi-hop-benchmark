@@ -1,0 +1,44 @@
+---
+description: Commit early, push often - never lose work to uncommitted changes
+alwaysApply: true
+---
+
+# Checkpoint Regularly
+
+> **"Commit early, push often, never lose work."**
+
+Large, uncommitted changesets are disasters waiting to happen.
+
+## Checkpoint Triggers
+
+You MUST commit and push when:
+
+| Trigger | Why |
+| --- | --- |
+| Feature complete | Logical unit of work done |
+| Tests passing | Known-good state worth preserving |
+| Before risky refactor | Safety net if refactor fails |
+| After ~30 minutes of work | Time-based protection |
+| Before switching tasks | Clean handoff point |
+| Before ending session | Never leave work uncommitted |
+
+## Git Discipline
+
+### Commit Messages
+
+```bash
+# GOOD: Descriptive, scoped
+git commit -m "feat(wormhole): wire initializeCentroids to respect config"
+git commit -m "fix(aboyeur): integrate createWorkItemsFromChecklist"
+
+# BAD: Vague
+git commit -m "updates"
+git commit -m "wip"
+```
+
+### Rules
+- One logical change per commit
+- If you can't describe it in one line, it's too big
+- Push immediately after every commit — push is free, losing work is expensive
+
+**Checkpoint. Push. Repeat.**

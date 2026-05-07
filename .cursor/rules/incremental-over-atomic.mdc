@@ -1,0 +1,51 @@
+---
+description: Small verifiable steps over big-bang changes - each increment must compile, pass tests, and be functional
+alwaysApply: true
+---
+
+# Incremental Over Atomic
+
+> **"Small steps that individually work > Large steps that eventually work."**
+
+Big-bang changes are high-risk gambles. Incremental changes are safe, reviewable, and reversible.
+
+## Instead of Big Bang → Incremental Slices
+
+| Big Bang | Incremental |
+| --- | --- |
+| Refactor entire module at once | Refactor one function, verify, commit, repeat |
+| Add feature + tests + docs in one PR | Types first → logic → tests → docs |
+| Replace old system with new | Run both in parallel, migrate gradually, remove old |
+
+## Each Increment Must Be
+
+- **Verifiable** — can be tested independently
+- **Reversible** — can be rolled back without affecting other changes
+- **Reviewable** — small enough to understand in < 5 minutes
+- **Deployable** — doesn't break the build in isolation
+
+If an increment takes more than 30 minutes, slice smaller.
+
+## The Working State Rule
+
+At every checkpoint, the codebase MUST: compile, pass tests, be functional.
+
+## Refactoring Pattern
+
+```text
+# GOOD: Incremental
+1. Add new function alongside old → verify (commit)
+2. Migrate one caller → verify (commit)
+3. Repeat until all callers migrated
+4. Remove old function (commit)
+```
+
+## Anti-Pattern Detector
+
+- Changing more than 5 files at once → **Slice smaller**
+- Working 1+ hour without a commit → **Checkpoint now**
+- Unable to describe the change in one sentence → **It's too big**
+- Afraid to run tests because "it's not done yet" → **You've gone too far**
+
+**Small steps. Verify each one. Never break the build.**
+

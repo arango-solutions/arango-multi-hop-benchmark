@@ -1,0 +1,52 @@
+---
+description: Every code change deserves a test change - new functions get tests, bug fixes get regression tests
+alwaysApply: true
+---
+
+# Test What You Touch
+
+> **"Every code change deserves a test change."**
+
+If you changed code, you changed behavior. If you changed behavior, tests must verify it.
+
+## The Testing Mandate
+
+| Code Change Type | Required Test Change |
+| --- | --- |
+| New function | New unit test |
+| New endpoint | New integration test |
+| Bug fix | Regression test (would have caught the bug) |
+| Refactor | Run existing tests, add any missing coverage |
+| New error path | Test that exercises the error path |
+| Config change | Test with different config values |
+
+## Test Coverage
+
+For new functions, test: happy path, error paths (invalid/empty input), edge cases (boundary values).
+
+For bug fixes: write a regression test that reproduces the original bug, then verify the fix.
+
+For refactors: all existing tests MUST still pass. If they don't cover the refactored path, add tests FIRST.
+
+## The "Touched Files" Rule
+
+For every file you modify:
+- Is there a corresponding test file? If no → create one
+- Does the test file cover the code you changed? If no → add coverage
+- Did you run the tests after your change? If no → run them now
+
+## Test Quality
+
+- Deterministic — no flaky tests
+- Fast — slow tests don't get run
+- Isolated — no shared state between tests
+- Clear names — `TestX_WhenY_ShouldZ` format
+- Assert behavior — not just "no panic"
+
+## Anti-Patterns
+
+- "I tested manually" → Write an automated test
+- "I'll add tests later" → Tests are written NOW
+- "It's just a small change" → Small changes still need tests
+
+**If you wrote it, test it.**
