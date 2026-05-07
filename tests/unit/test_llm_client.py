@@ -101,7 +101,7 @@ def test_strip_citations_removes_short_form():
 
 
 def test_strip_citations_removes_collection_prefixed_form():
-    text = "First fact [wtw_ingest_bench_sources/file__chunk_00012] and more."
+    text = "First fact [my_sources/file__chunk_00012] and more."
     assert strip_citations(text) == "First fact  and more."
 
 

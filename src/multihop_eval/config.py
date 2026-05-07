@@ -51,12 +51,12 @@ class ArangoConfig(BaseSettings):
     username: str = Field(default="root")
     password: SecretStr = Field(...)
 
-    similarity_collection: str = "wtw_ingest_bench_similarities"
-    relations_collection: str = "wtw_ingest_bench_corpus_relations"
-    rags_collection: str = "wtw_ingest_bench_rags"
-    sources_collection: str = "wtw_ingest_bench_sources"
-    domains_collection: str = "wtw_ingest_bench_domains"
-    qa_collection: str = "qa_pairs_wtw_ingest_bench_v1"
+    similarity_collection: str = "multihop_eval_similarities"
+    relations_collection: str = "multihop_eval_corpus_relations"
+    rags_collection: str = "multihop_eval_rags"
+    sources_collection: str = "multihop_eval_sources"
+    domains_collection: str = "multihop_eval_domains"
+    qa_collection: str = "qa_pairs_multihop_eval_v1"
 
     @field_validator("host")
     @classmethod
@@ -92,7 +92,7 @@ class LLMConfig(BaseSettings):
 class EvalConfig(BaseModel):
     """Generation-pipeline knobs + user-editable personas and rubric."""
 
-    target_clusters: list[str] = Field(default_factory=lambda: ["cluster_wtw_ingest_0"])
+    target_clusters: list[str] = Field(default_factory=lambda: ["cluster_0"])
     n_questions: int = Field(default=50, gt=0, le=10_000)
     hop_dist: list[int] = Field(default_factory=lambda: [2, 3])
     hop_dist_weights: list[float] = Field(default_factory=lambda: [0.7, 0.3])

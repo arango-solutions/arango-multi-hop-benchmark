@@ -1,7 +1,8 @@
 """Question personas — each persona conditions the LLM's question style.
 
-Personas are user-editable from the Streamlit Configure tab; the defaults
-preserve the behavior of the original `multihop_qa_generator.py` script.
+Personas are user-editable from the Streamlit Configure tab. The defaults
+ship as domain-neutral starting points; tailor them for the domain of the
+corpus being evaluated.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ class Persona(BaseModel):
         ...,
         min_length=1,
         max_length=64,
-        description="Short identifier stored on every QA row, e.g. 'hr_manager'.",
+        description="Short identifier stored on every QA row, e.g. 'domain_expert'.",
     )
     instruction: str = Field(
         ...,
@@ -38,21 +39,21 @@ class Persona(BaseModel):
 
 DEFAULT_PERSONAS: list[Persona] = [
     Persona(
-        label="hr_manager",
+        label="domain_expert",
         instruction=(
-            "Write as an HR manager at a mid-to-large company who needs to make a practical "
-            "decision about a benefits, compensation, or workforce policy. State the situation "
-            "briefly and ask a focused question about what approach to take or what the "
-            "tradeoffs are. Sound informed but not a specialist. 2-3 sentences max. Don't "
-            "over-explain the company background."
+            "Write as a domain expert at a mid-to-large organisation who needs to make a "
+            "practical decision about an internal program, policy, or population. State the "
+            "situation briefly and ask a focused question about what approach to take or what "
+            "the tradeoffs are. Sound informed but not a specialist. 2-3 sentences max. Don't "
+            "over-explain the organisational background."
         ),
     ),
     Persona(
-        label="hr_analyst",
+        label="analyst",
         instruction=(
-            "Write as an HR professional looking up a specific piece of information from a "
-            "publication. Ask a clear, direct question based on what the documents contain. "
-            "Keep it short and factual — 1 to 2 sentences max."
+            "Write as an analyst looking up a specific piece of information from a publication. "
+            "Ask a clear, direct question based on what the documents contain. Keep it short "
+            "and factual — 1 to 2 sentences max."
         ),
     ),
 ]

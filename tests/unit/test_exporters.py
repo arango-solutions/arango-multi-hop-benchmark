@@ -23,7 +23,7 @@ def _accepted(
     *,
     hops: int = 2,
     cluster: str = "dom/cluster_a",
-    persona: str = "hr_manager",
+    persona: str = "domain_expert",
     rubric_scores: dict | None = None,
     weighted: float | None = None,
 ) -> AcceptedQA:
@@ -127,7 +127,7 @@ def test_export_run_to_json_includes_rejected_and_timing(tmp_path):
         rejected=[
             RejectedQA(
                 cluster_id="dom/cluster_a",
-                persona="hr_manager",
+                persona="domain_expert",
                 seed_doc_id="src/x",
                 reason=RejectionReason.MULTIHOP_BELOW_FLOOR,
             )

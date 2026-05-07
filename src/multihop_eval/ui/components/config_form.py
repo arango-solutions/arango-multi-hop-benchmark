@@ -29,29 +29,29 @@ def _arango_form(prefill: ArangoConfig | None) -> dict[str, Any]:
         cols = st.columns(2)
         sim = cols[0].text_input(
             "Similarity collection",
-            value=(prefill.similarity_collection if prefill else "wtw_ingest_bench_similarities"),
+            value=(prefill.similarity_collection if prefill else "multihop_eval_similarities"),
         )
         rel = cols[1].text_input(
             "Relations collection",
-            value=(prefill.relations_collection if prefill else "wtw_ingest_bench_corpus_relations"),
+            value=(prefill.relations_collection if prefill else "multihop_eval_corpus_relations"),
         )
         cols = st.columns(2)
         rags = cols[0].text_input(
             "RAGs collection",
-            value=(prefill.rags_collection if prefill else "wtw_ingest_bench_rags"),
+            value=(prefill.rags_collection if prefill else "multihop_eval_rags"),
         )
         sources = cols[1].text_input(
             "Sources collection",
-            value=(prefill.sources_collection if prefill else "wtw_ingest_bench_sources"),
+            value=(prefill.sources_collection if prefill else "multihop_eval_sources"),
         )
         cols = st.columns(2)
         domains = cols[0].text_input(
             "Domains collection",
-            value=(prefill.domains_collection if prefill else "wtw_ingest_bench_domains"),
+            value=(prefill.domains_collection if prefill else "multihop_eval_domains"),
         )
         qa = cols[1].text_input(
             "QA collection (output)",
-            value=(prefill.qa_collection if prefill else "qa_pairs_wtw_ingest_bench_v1"),
+            value=(prefill.qa_collection if prefill else "qa_pairs_multihop_eval_v1"),
         )
     return {
         "host": host,
@@ -122,7 +122,7 @@ def _eval_form(prefill: EvalConfig | None) -> dict[str, Any]:
     cols = st.columns(2)
     clusters_str = cols[0].text_area(
         "Target clusters (one per line)",
-        value="\n".join(prefill.target_clusters if prefill else ["cluster_wtw_ingest_0"]),
+        value="\n".join(prefill.target_clusters if prefill else ["cluster_0"]),
         height=110,
     )
     n_questions = cols[1].number_input(

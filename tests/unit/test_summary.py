@@ -20,7 +20,7 @@ from multihop_eval.summary import build_summary
 def _accepted(
     *,
     cluster: str = "dom/cluster_a",
-    persona: str = "hr_manager",
+    persona: str = "domain_expert",
     hops: int = 2,
     weighted: float | None = 0.8,
     rubric: dict[str, RubricScore] | None = None,
@@ -42,7 +42,7 @@ def _accepted(
 def _rejected(reason: RejectionReason = RejectionReason.MULTIHOP_BELOW_FLOOR) -> RejectedQA:
     return RejectedQA(
         cluster_id="dom/cluster_a",
-        persona="hr_manager",
+        persona="domain_expert",
         seed_doc_id="src/seed",
         reason=reason,
     )
@@ -73,9 +73,9 @@ def test_summary_empty_run():
 
 def test_summary_counts_and_distributions():
     accepted = [
-        _accepted(hops=2, persona="hr_manager"),
-        _accepted(hops=3, persona="hr_analyst"),
-        _accepted(hops=3, persona="hr_manager"),
+        _accepted(hops=2, persona="domain_expert"),
+        _accepted(hops=3, persona="analyst"),
+        _accepted(hops=3, persona="domain_expert"),
     ]
     rejected = [
         _rejected(RejectionReason.MULTIHOP_BELOW_FLOOR),
@@ -89,7 +89,7 @@ def test_summary_counts_and_distributions():
     assert s.accept_rate == pytest.approx(0.5)
     assert s.avg_hop_count == pytest.approx((2 + 3 + 3) / 3)
     assert s.hop_distribution == {2: 1, 3: 2}
-    assert s.persona_distribution == {"hr_manager": 2, "hr_analyst": 1}
+    assert s.persona_distribution == {"domain_expert": 2, "analyst": 1}
     assert s.rejection_breakdown == {
         RejectionReason.MULTIHOP_BELOW_FLOOR.value: 2,
         RejectionReason.PROOF_VERIFY_FAILED.value: 1,

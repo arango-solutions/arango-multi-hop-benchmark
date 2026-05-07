@@ -50,7 +50,7 @@ def test_rubric_evaluator_returns_per_field_scores_and_aggregate():
         question="Q?",
         answer="A.",
         proof=[],
-        persona_label="hr_manager",
+        persona_label="domain_expert",
         content_blob="content",
     )
     assert scores["factuality"].score == 5

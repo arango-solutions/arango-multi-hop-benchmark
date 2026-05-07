@@ -51,7 +51,7 @@ def test_llm_config_temperature_bounds():
 
 def test_eval_config_defaults_are_valid():
     ec = EvalConfig()
-    assert ec.target_clusters == ["cluster_wtw_ingest_0"]
+    assert ec.target_clusters == ["cluster_0"]
     assert sum(ec.hop_dist_weights) == pytest.approx(1.0)
     assert len(ec.personas) == len(DEFAULT_PERSONAS)
     assert len(ec.rubric_fields) == len(DEFAULT_RUBRIC)

@@ -11,15 +11,15 @@ from tests.conftest import FakeLLMClient
 
 def _sources():
     return [
-        {"_id": "src/a", "content": "Doc A about wellness benefits."},
-        {"_id": "src/b", "content": "Doc B about retirement matching."},
+        {"_id": "src/a", "content": "Doc A describes the eligibility rules for program X."},
+        {"_id": "src/b", "content": "Doc B describes the contribution tiers for program X."},
     ]
 
 
 def _proof():
     return [
-        {"point": "Wellness program is offered.", "source_id": "src/a"},
-        {"point": "Retirement match is 5%.", "source_id": "src/b"},
+        {"point": "Program X is offered to all full-time employees.", "source_id": "src/a"},
+        {"point": "Program X contribution is 5% at tier two.", "source_id": "src/b"},
     ]
 
 

@@ -28,7 +28,7 @@ def _seed_arango() -> FakeArangoGateway:
     Pass 2 (top-up) has fresh seeds beyond Pass 1's pool."""
     doc_ids = [f"src/d{i:02d}" for i in range(16)]
     docs = {
-        did: {"content": f"Doc {did} content about HR topic {i}.", "filename": f"{did}.pdf"}
+        did: {"content": f"Doc {did} content about topic {i}.", "filename": f"{did}.pdf"}
         for i, did in enumerate(doc_ids)
     }
     sims: list[tuple[str, str, float]] = []

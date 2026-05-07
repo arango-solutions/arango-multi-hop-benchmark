@@ -77,7 +77,7 @@ class GenerationPipeline:
         *,
         llm: LLMClient,
         max_verify_rounds: int = 3,
-        domains_collection: str = "wtw_ingest_bench_domains",
+        domains_collection: str = "multihop_eval_domains",
     ) -> None:
         self.llm = llm
         self.max_verify_rounds = max_verify_rounds

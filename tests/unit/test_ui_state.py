@@ -72,7 +72,7 @@ def test_start_run_executes_runner_and_returns_result():
                 cluster_id="c",
                 partition_id="p",
                 hop_count=2,
-                persona="hr_manager",
+                persona="domain_expert",
                 reasoning_chain="r",
                 question="q?",
                 answer="a.",

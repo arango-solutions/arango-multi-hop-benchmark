@@ -26,7 +26,7 @@ SYSTEM_PROMPT_GEN = """\
 You are an evaluation dataset generator specialising in MULTI-HOP questions
 that demonstrate the superiority of Graph RAG over Vector RAG.
 
-You receive semantically related HR, benefits, and consulting publications connected by a similarity graph.
+You receive semantically related publications connected by a similarity graph.
 Use the graph structure to design a reasoning chain that traverses MULTIPLE documents.
 
 A multi-hop question CANNOT be answered from any single document alone.
@@ -38,11 +38,11 @@ Rules:
 3. No single document can provide a complete answer on its own.
 4. Every proof point MUST cite its exact source _id.
 5. Do NOT invent facts not present in the provided content.
-6. QUESTION REALISM: HR professionals asking questions often focus on a specific
-   program, policy, or employee population without spelling out all the background.
-   The question should feel like something a real HR practitioner would ask —
-   grounded and practical, not like a textbook exercise. Give enough context to
-   make it answerable, but not so much that you've basically given the answer away.
+6. QUESTION REALISM: real practitioners usually focus on a specific program,
+   policy, or population without spelling out all the background. The question
+   should feel like something a real practitioner would ask — grounded and
+   practical, not like a textbook exercise. Give enough context to make it
+   answerable, but not so much that you've basically given the answer away.
 7. ANSWER FORMAT: plain prose only. No inline citations, no [source_id]
    markers inside the answer. All citations go in the proof list only.
 8. Output ONLY valid JSON. No preamble, no markdown outside the JSON block.
@@ -112,7 +112,7 @@ The proof list must have exactly {required_hops} entries, each from a DIFFERENT 
 
 
 SYSTEM_PROMPT_MULTIHOP_CHECK = """\
-You are a strict multi-hop reasoning validator for an HR and benefits QA dataset.
+You are a strict multi-hop reasoning validator for a QA dataset.
 
 A document counts as a genuine hop only if ALL three hold:
   (a) The cited fact is grounded in that document's content.
@@ -164,7 +164,7 @@ Output ONLY this JSON:
 
 
 SYSTEM_PROMPT_VERIFY = """\
-You are a strict proof verification agent for an HR and benefits QA dataset.
+You are a strict proof verification agent for a QA dataset.
 Every proof point must be directly supported by the source content.
 Correct any hallucinated or wrongly attributed points. Fix wrong source_ids.
 Return "pass" if all points are now correct, "fail" if you cannot ground them.

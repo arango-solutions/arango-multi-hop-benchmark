@@ -21,7 +21,10 @@ from multihop_eval.rubric import RubricField
 
 
 def _persona() -> Persona:
-    return Persona(label="hr_manager", instruction="Write as a curious HR manager and ask clearly.")
+    return Persona(
+        label="domain_expert",
+        instruction="Write as a curious domain expert and ask clearly.",
+    )
 
 
 def _docs() -> list[dict]:
@@ -66,7 +69,7 @@ def test_gen_prompt_renders_persona_instruction():
     prompt = build_gen_prompt(
         cluster_id="x", docs=_docs(), edges=[], persona=_persona(), required_hops=2
     )
-    assert "curious HR manager" in prompt
+    assert "curious domain expert" in prompt
 
 
 def test_system_prompt_gen_is_nonempty():
@@ -137,7 +140,7 @@ def test_rubric_prompt_lists_every_user_field_name_and_description():
         question="Q?",
         answer="A.",
         proof=[],
-        persona_label="hr_manager",
+        persona_label="domain_expert",
         rubric_fields=fields,
         content_blob="content",
     )

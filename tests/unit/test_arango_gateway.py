@@ -128,7 +128,7 @@ def test_insert_qa_row_writes_expected_fields(gateway, db_obj):
             "cluster_id": "dom/cluster_test_0",
             "partition_id": "test_0_part",
             "hop_count": 3,
-            "persona": "hr_manager",
+            "persona": "domain_expert",
             "reasoning_chain": "A->B->C",
             "question": "q?",
             "answer": "a.",
