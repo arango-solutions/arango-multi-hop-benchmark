@@ -7,7 +7,14 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
+from multihop_eval.config import (
+    AppConfig,
+    ArangoConfig,
+    EvalConfig,
+    LangFuseConfig,
+    LLMConfig,
+    RagEvalConfig,
+)
 from multihop_eval.personas import DEFAULT_PERSONAS, Persona
 from multihop_eval.rubric import DEFAULT_RUBRIC, RubricField
 
@@ -125,3 +132,61 @@ def test_rubric_scale_min_must_be_less_than_max():
 def test_rubric_name_must_be_identifier_safe():
     with pytest.raises(ValidationError):
         RubricField(name="bad name with spaces", description="long enough description here")
+
+
+def test_rag_eval_config_defaults():
+    cfg = RagEvalConfig()
+    assert cfg.relevance_mode == "binary"
+    assert cfg.response_source == "jsonl"
+    assert cfg.k_values == [1, 3, 5, 10]
+    assert cfg.length_z_threshold == pytest.approx(2.0)
+
+
+def test_rag_eval_config_rejects_unknown_relevance_mode():
+    with pytest.raises(ValidationError):
+        RagEvalConfig(relevance_mode="weighted")
+
+
+def test_rag_eval_config_rejects_unknown_source():
+    with pytest.raises(ValidationError):
+        RagEvalConfig(response_source="csv")
+
+
+def test_rag_eval_config_k_values_must_be_positive_and_unique():
+    with pytest.raises(ValidationError):
+        RagEvalConfig(k_values=[0, 5])
+    # Duplicates are normalised, not rejected.
+    cfg = RagEvalConfig(k_values=[5, 3, 5, 1])
+    assert cfg.k_values == [1, 3, 5]
+
+
+def test_rag_eval_config_rejects_empty_k_values():
+    with pytest.raises(ValidationError):
+        RagEvalConfig(k_values=[])
+
+
+def test_langfuse_config_disabled_by_default():
+    # No env vars set -> not configured.
+    cfg = LangFuseConfig()  # type: ignore[call-arg]
+    assert cfg.enabled is False
+    assert cfg.is_configured() is False
+
+
+def test_langfuse_config_is_configured_when_enabled_with_creds(monkeypatch):
+    monkeypatch.setenv("LANGFUSE_ENABLED", "true")
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    cfg = LangFuseConfig()  # type: ignore[call-arg]
+    assert cfg.enabled is True
+    assert cfg.is_configured() is True
+
+
+def test_app_config_safe_dict_redacts_langfuse_secrets():
+    cfg = AppConfig(
+        arango=ArangoConfig(host="https://x.example.com", db="d", password="p"),  # type: ignore[arg-type]
+        llm=LLMConfig(api_key="sk"),  # type: ignore[arg-type]
+        langfuse=LangFuseConfig(public_key="pk", secret_key="sks"),  # type: ignore[arg-type]
+    )
+    safe = cfg.to_safe_dict()
+    assert safe["langfuse"]["public_key"] == "***"
+    assert safe["langfuse"]["secret_key"] == "***"

@@ -247,3 +247,58 @@ def test_fetch_qa_rows_with_limit(gateway, db_obj):
     assert len(out) == 2
     assert "@qa" in db_obj.aql.last_calls[0]["bind_vars"]
     assert db_obj.aql.last_calls[0]["bind_vars"]["limit"] == 2
+
+
+def test_fetch_goldens_with_keys_delegates(gateway, db_obj):
+    db_obj.aql.scripts = [[{"_key": "1"}]]
+    out = gateway.fetch_goldens_with_keys()
+    assert out == [{"_key": "1"}]
+
+
+def test_ensure_rag_response_collection_creates_when_missing(gateway, db_obj):
+    gateway.ensure_rag_response_collection("rag_responses_v1")
+    assert "rag_responses_v1" in db_obj.created_collections
+
+
+def test_ensure_rag_response_collection_skips_when_existing(gateway, db_obj):
+    db_obj.existing_collections.add("rag_responses_v1")
+    gateway.ensure_rag_response_collection("rag_responses_v1")
+    assert "rag_responses_v1" not in db_obj.created_collections
+
+
+def test_fetch_rag_responses_no_filters(gateway, db_obj):
+    db_obj.aql.scripts = [[{"_key": "rag_v1__q1"}]]
+    out = gateway.fetch_rag_responses("rag_responses_v1")
+    assert out == [{"_key": "rag_v1__q1"}]
+    call = db_obj.aql.last_calls[0]
+    assert call["bind_vars"]["@coll"] == "rag_responses_v1"
+    assert "system_name" not in call["bind_vars"]
+    assert "qa_keys" not in call["bind_vars"]
+
+
+def test_fetch_rag_responses_filters_by_system_name(gateway, db_obj):
+    db_obj.aql.scripts = [[]]
+    gateway.fetch_rag_responses("rag_responses_v1", system_name="rag_v2")
+    call = db_obj.aql.last_calls[0]
+    assert call["bind_vars"]["system_name"] == "rag_v2"
+    assert "FILTER" in call["query"]
+
+
+def test_fetch_rag_responses_filters_by_qa_keys(gateway, db_obj):
+    db_obj.aql.scripts = [[]]
+    gateway.fetch_rag_responses("rag_responses_v1", qa_keys=["q1", "q2"])
+    call = db_obj.aql.last_calls[0]
+    assert call["bind_vars"]["qa_keys"] == ["q1", "q2"]
+
+
+def test_fetch_rag_responses_applies_limit(gateway, db_obj):
+    db_obj.aql.scripts = [[]]
+    gateway.fetch_rag_responses("rag_responses_v1", limit=5)
+    call = db_obj.aql.last_calls[0]
+    assert call["bind_vars"]["limit"] == 5
+    assert "LIMIT" in call["query"]
+
+
+def test_list_rag_systems_returns_sorted_distinct(gateway, db_obj):
+    db_obj.aql.scripts = [["rag_v2", "rag_v1", None]]
+    assert gateway.list_rag_systems("rag_responses_v1") == ["rag_v1", "rag_v2"]

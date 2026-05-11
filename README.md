@@ -25,6 +25,16 @@ It also ships an **Ad-hoc** tab for validating an existing question / answer /
 proof against pasted source documents — useful for spot-checking a single QA
 pair without running the full pipeline.
 
+A **RAG Eval** tab evaluates an external RAG system's answers against the
+generated golden set. It computes retrieval metrics (Precision@K, Recall@K,
+MRR, NDCG@K, HitRate@K, Chunk Overlap Rate, Exact Match) and rule-based
+generation metrics (Groundedness, Source Diversity, Citation Coverage,
+Length Consistency, ROUGE-L, Empty Retrieval Rate) — no LLM-as-judge, every
+score is deterministic. Two or more `system_name`s in the same source are
+rendered side-by-side for A/B comparison. Human-annotation metrics
+(faithfulness / relevancy / hallucination / completeness / coherence) flow
+through an optional LangFuse sink.
+
 ## Architecture
 
 ```text
@@ -40,8 +50,15 @@ src/multihop_eval/
 ├── rubric_evaluator.py       # judge-LLM-driven rubric scorer
 ├── adhoc.py                  # AdhocEvaluator — validates user-supplied Q/A/proof
 ├── summary.py                # build_summary(RunResult) → KPIs + distributions
-├── exporters/                # Excel + JSON writers
-└── ui/                       # Streamlit app: Configure / Run / Dashboard / Ad-hoc tabs
+├── exporters/                # Excel + JSON writers (incl. rag_eval exporter)
+├── rag_eval/                 # RAG-system evaluation feature
+│   ├── models.py             #   RagResponse / RagEvalRun / RagMetricBundle
+│   ├── qrels.py              #   golden proof_list → qrels (binary | graded)
+│   ├── sources/              #   JSONL upload + Arango sink loaders
+│   ├── metrics/              #   retrieval.py + generation.py (no-LLM scorers)
+│   ├── pipeline.py           #   RagEvalOrchestrator (per-system aggregation)
+│   └── langfuse_sink.py      #   optional human-annotation sink
+└── ui/                       # Streamlit app: Configure / Run / Dashboard / Ad-hoc / RAG Eval tabs
 ```
 
 ## Quick start (local)
@@ -67,10 +84,6 @@ uv run pytest          # all unit + integration tests
 uv run ruff check .    # lint
 ```
 
-The test suite uses **fakes** for the LLM and ArangoDB — it never hits a
-network. Integration tests in `tests/integration/` exercise the full
-`EvaluationOrchestrator.run()` against an in-memory cluster.
-
 ## Containerising for Arango BYOC
 
 This project is laid out so [ServiceMaker](https://github.com/arangodb/servicemaker)
@@ -79,9 +92,7 @@ can package it without modification. Per the Arango BYOC contract:
 * The Streamlit service binds to `0.0.0.0:8000` and serves at the root path
   (`baseUrlPath=""`) — see [main.py](main.py).
 * All dependencies live in `[project.dependencies]` of
-  [pyproject.toml](pyproject.toml) (no `uv sync --extra` extras at runtime —
-  see ServiceMaker gotcha #2 in
-  [.cursor/skills/package-for-arango-byoc-skill.md](.cursor/skills/package-for-arango-byoc-skill.md)).
+  [pyproject.toml](pyproject.toml) (no `uv sync --extra` extras at runtime 
 * Python 3.13 is required (`.python-version` and `pyproject.toml` agree).
 
 ### ServiceMaker workflow
@@ -142,6 +153,37 @@ docker run --rm -p 8000:8000 \
   distribution charts, filterable table, Excel/JSON downloads.
 * **Ad-hoc** — paste a Q/A/proof + source docs, run multi-hop and proof
   verification only. Optionally also score with the configured rubric.
+* **RAG Eval** — fetch goldens, configure relevance grading (binary or
+  graded) and K cut-offs, upload responses as JSONL or read them from an
+  Arango sink, compute metrics for one-or-many `system_name`s, and download
+  the result as Excel or JSON. When LangFuse is configured, an extra panel
+  appears for pushing traces and pulling annotator scores.
+
+### RAG response JSONL schema
+
+One JSON object per line, one line per (system, question):
+
+```json
+{
+  "system_name": "rag_v2",
+  "qa_pair_key": "1234567",
+  "question": "...",
+  "answer": "Foo bar [sources/abc].",
+  "retrieved_chunks": [
+    {"doc_id": "sources/abc", "rank": 1, "score": 0.92, "text": "..."},
+    {"doc_id": "sources/xyz", "rank": 2, "score": 0.81, "text": "..."}
+  ],
+  "metadata": {"latency_ms": 1200}
+}
+```
+
+* `qa_pair_key` must match a golden `_key` — use the **Download goldens
+  JSONL** button on the RAG Eval tab to hand the right keys to the RAG team.
+* `text` is optional. When present it powers groundedness; when missing,
+  groundedness falls back to matching against the `doc_id` strings (lower
+  signal but never zero by construction).
+* The Arango sink uses the same shape, with `_key = "{system_name}__{qa_pair_key}"`
+  so re-runs upsert instead of duplicating.
 
 ## Configuration reference
 
@@ -160,6 +202,10 @@ Configure tab) but required for non-interactive runs.
 | `LLM_MODEL` | `gpt-4.1` | |
 | `LLM_TEMPERATURE` | `0.3` | |
 | `LLM_MAX_TOKENS` | `4000` | |
+| `LANGFUSE_ENABLED` | `false` | flip to `true` to surface the LangFuse panel |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | self-host? point this at it |
+| `LANGFUSE_PUBLIC_KEY` | — | LangFuse public key (set only when enabled) |
+| `LANGFUSE_SECRET_KEY` | — | LangFuse secret key (set only when enabled) |
 
 See [src/multihop_eval/config.py](src/multihop_eval/config.py) for the full
 list and validation rules.

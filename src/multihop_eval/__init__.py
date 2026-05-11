@@ -10,7 +10,14 @@ Public surface — import what you need from here:
     )
 """
 
-from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
+from multihop_eval.config import (
+    AppConfig,
+    ArangoConfig,
+    EvalConfig,
+    LangFuseConfig,
+    LLMConfig,
+    RagEvalConfig,
+)
 from multihop_eval.personas import DEFAULT_PERSONAS, Persona
 from multihop_eval.rubric import DEFAULT_RUBRIC, RubricField
 
@@ -19,6 +26,8 @@ __all__ = [
     "ArangoConfig",
     "LLMConfig",
     "EvalConfig",
+    "RagEvalConfig",
+    "LangFuseConfig",
     "Persona",
     "DEFAULT_PERSONAS",
     "RubricField",

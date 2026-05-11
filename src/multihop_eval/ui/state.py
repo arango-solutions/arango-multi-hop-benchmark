@@ -31,6 +31,11 @@ KEY_RUN_EVENTS = "run_events"
 KEY_RUN_STATUS = "run_status"  # 'idle' | 'running' | 'paused' | 'done' | 'stopped' | 'error'
 KEY_SHOW_STOP_MODAL = "show_stop_modal"
 
+# RAG-eval session state — populated by the RAG Eval tab.
+KEY_RAG_EVAL_RUNS = "rag_eval_runs"  # dict[str, RagEvalRun] keyed by system_name
+KEY_RAG_GOLDENS_CACHE = "rag_goldens_cache"  # list[dict] — fetched once, reused
+KEY_RAG_LOAD_ERRORS = "rag_load_errors"  # list[str] — last load's parse errors
+
 
 @dataclass
 class RunHandle:
@@ -169,6 +174,9 @@ def init_session_state(st_module: Any) -> None:
         KEY_RUN_EVENTS: [],
         KEY_RUN_STATUS: "idle",
         KEY_SHOW_STOP_MODAL: False,
+        KEY_RAG_EVAL_RUNS: {},
+        KEY_RAG_GOLDENS_CACHE: None,
+        KEY_RAG_LOAD_ERRORS: [],
     }
     for k, v in defaults.items():
         if k not in st_module.session_state:

@@ -85,6 +85,73 @@ class ArangoGateway:
             bind["limit"] = limit
         return list(self._db.aql.execute(query, bind_vars=bind))
 
+    def fetch_goldens_with_keys(self, limit: int | None = None) -> list[dict[str, Any]]:
+        """Return QA rows including `_key`, suitable for `build_qrels`.
+
+        Identical to `fetch_qa_rows`. Kept as a separate method so callers in
+        the rag-eval module can express intent ('I need the keys') without
+        coupling to the generation-side reader name.
+        """
+        return self.fetch_qa_rows(limit=limit)
+
+    # ------------------------------------------------------------------
+    # RAG-response collection (used by the rag_eval feature)
+    # ------------------------------------------------------------------
+
+    def ensure_rag_response_collection(self, name: str) -> None:
+        """Create the named RAG-response collection if it doesn't exist."""
+        if not self._db.has_collection(name):
+            self._db.create_collection(name)
+            log.info("Created RAG response collection '%s'.", name)
+
+    def fetch_rag_responses(
+        self,
+        collection: str,
+        *,
+        system_name: str | None = None,
+        qa_keys: list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return raw RAG-response rows, optionally filtered.
+
+        Args:
+            collection: Name of the response collection (e.g. `rag_responses_v1`).
+            system_name: If set, only rows whose `system_name` matches.
+            qa_keys: If set, only rows whose `qa_pair_key` is in this list.
+            limit: Optional row cap (newest-first by `_key`).
+        """
+        clauses: list[str] = []
+        bind: dict[str, Any] = {"@coll": collection}
+        if system_name is not None:
+            clauses.append("r.system_name == @system_name")
+            bind["system_name"] = system_name
+        if qa_keys is not None:
+            clauses.append("r.qa_pair_key IN @qa_keys")
+            bind["qa_keys"] = list(qa_keys)
+        filter_block = ("FILTER " + " AND ".join(clauses)) if clauses else ""
+        limit_block = ""
+        if limit is not None:
+            limit_block = "LIMIT @limit"
+            bind["limit"] = int(limit)
+        query = f"""
+        FOR r IN @@coll
+            {filter_block}
+            SORT r._key DESC
+            {limit_block}
+            RETURN r
+        """
+        return list(self._db.aql.execute(query, bind_vars=bind))
+
+    def list_rag_systems(self, collection: str) -> list[str]:
+        """Return the distinct `system_name` values present in the collection."""
+        query = """
+        FOR r IN @@coll
+            COLLECT s = r.system_name
+            RETURN s
+        """
+        rows = list(self._db.aql.execute(query, bind_vars={"@coll": collection}))
+        return sorted(s for s in rows if s)
+
     # ------------------------------------------------------------------
     # Cluster + similarity reads
     # ------------------------------------------------------------------

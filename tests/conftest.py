@@ -105,6 +105,10 @@ class FakeArangoGateway:
     inserted_qa: list[dict[str, Any]] = field(default_factory=list)
     qa_collection_ensured: bool = False
 
+    rag_response_collections_ensured: set[str] = field(default_factory=set)
+    rag_responses: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    """collection name -> list of stored response rows."""
+
     def ping(self) -> bool:
         return True
 
@@ -118,6 +122,36 @@ class FakeArangoGateway:
         if limit is None:
             return list(self.inserted_qa)
         return list(self.inserted_qa[:limit])
+
+    def fetch_goldens_with_keys(self, limit: int | None = None) -> list[dict[str, Any]]:
+        return self.fetch_qa_rows(limit=limit)
+
+    def ensure_rag_response_collection(self, name: str) -> None:
+        self.rag_response_collections_ensured.add(name)
+        self.rag_responses.setdefault(name, [])
+
+    def fetch_rag_responses(
+        self,
+        collection: str,
+        *,
+        system_name: str | None = None,
+        qa_keys: list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = list(self.rag_responses.get(collection, []))
+        if system_name is not None:
+            rows = [r for r in rows if r.get("system_name") == system_name]
+        if qa_keys is not None:
+            wanted = set(qa_keys)
+            rows = [r for r in rows if r.get("qa_pair_key") in wanted]
+        # Mimic the real gateway's sort-by-key-desc so test ordering matches prod.
+        rows.sort(key=lambda r: r.get("_key", ""), reverse=True)
+        if limit is not None:
+            rows = rows[:limit]
+        return rows
+
+    def list_rag_systems(self, collection: str) -> list[str]:
+        return sorted({r.get("system_name", "") for r in self.rag_responses.get(collection, []) if r.get("system_name")})
 
     def get_cluster_doc_ids(self, cluster_id: str) -> list[str]:
         return list(self.cluster_doc_ids.get(cluster_id, []))

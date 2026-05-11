@@ -24,6 +24,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from multihop_eval.personas import DEFAULT_PERSONAS, Persona
 from multihop_eval.rubric import DEFAULT_RUBRIC, RubricField
 
+RAG_RESPONSE_SOURCE_JSONL = "jsonl"
+RAG_RESPONSE_SOURCE_ARANGO = "arango"
+RAG_RELEVANCE_BINARY = "binary"
+RAG_RELEVANCE_GRADED = "graded"
+
 
 def _env_file_candidates() -> tuple[str, ...]:
     """Look for `./env` (used by the original script) and `./.env` (standard)."""
@@ -146,21 +151,147 @@ class EvalConfig(BaseModel):
         return self
 
 
+class RagEvalConfig(BaseModel):
+    """User-editable knobs for the RAG-evaluation feature.
+
+    These control how the orchestrator loads RAG-system responses, builds qrels
+    from the golden `proof_list`, and weights generation-side rule metrics.
+    """
+
+    relevance_mode: str = Field(
+        default=RAG_RELEVANCE_BINARY,
+        description=(
+            "How proof_list entries map to qrels. 'binary' = 1 if in proof_list else 0; "
+            "'graded' = higher grade to earlier hops (max(1, len(proof_list) - hop_index))."
+        ),
+    )
+    k_values: list[int] = Field(
+        default_factory=lambda: [1, 3, 5, 10],
+        description="Cut-offs for P@K, R@K, NDCG@K, HitRate@K.",
+    )
+    response_source: str = Field(
+        default=RAG_RESPONSE_SOURCE_JSONL,
+        description="Where the RAG responses come from: 'jsonl' (upload) or 'arango'.",
+    )
+    response_jsonl_path: str | None = Field(
+        default=None,
+        description="Local path to the uploaded JSONL — set by the UI after upload.",
+    )
+    response_arango_collection: str = Field(
+        default="rag_responses_v1",
+        description="Name of the Arango collection holding RAG responses.",
+    )
+    system_filter: list[str] = Field(
+        default_factory=list,
+        description=(
+            "If non-empty, only evaluate responses whose system_name is in this list. "
+            "Otherwise every system found in the source is evaluated."
+        ),
+    )
+    length_z_threshold: float = Field(
+        default=2.0,
+        gt=0.0,
+        le=10.0,
+        description="Flag a response as length-anomalous when |z(len(answer))| exceeds this.",
+    )
+    groundedness_fuzz_threshold: int = Field(
+        default=75,
+        ge=0,
+        le=100,
+        description=(
+            "rapidfuzz partial_ratio cutoff (0-100) above which a sentence is considered "
+            "grounded in the retrieved chunks."
+        ),
+    )
+    empty_retrieval_min_score: float | None = Field(
+        default=None,
+        description=(
+            "If set, a chunk only counts as 'retrieved' when its score crosses this floor; "
+            "used to compute Empty Retrieval Rate. Leave null to count any chunk as present."
+        ),
+    )
+
+    @field_validator("relevance_mode")
+    @classmethod
+    def _relevance_mode_known(cls, value: str) -> str:
+        if value not in {RAG_RELEVANCE_BINARY, RAG_RELEVANCE_GRADED}:
+            raise ValueError(
+                f"relevance_mode must be '{RAG_RELEVANCE_BINARY}' or "
+                f"'{RAG_RELEVANCE_GRADED}', got {value!r}."
+            )
+        return value
+
+    @field_validator("response_source")
+    @classmethod
+    def _source_known(cls, value: str) -> str:
+        if value not in {RAG_RESPONSE_SOURCE_JSONL, RAG_RESPONSE_SOURCE_ARANGO}:
+            raise ValueError(
+                f"response_source must be '{RAG_RESPONSE_SOURCE_JSONL}' or "
+                f"'{RAG_RESPONSE_SOURCE_ARANGO}', got {value!r}."
+            )
+        return value
+
+    @field_validator("k_values")
+    @classmethod
+    def _k_values_positive(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("k_values must contain at least one cut-off.")
+        if any(k <= 0 for k in value):
+            raise ValueError(f"k_values must all be > 0; got {value}.")
+        return sorted(set(value))
+
+
+class LangFuseConfig(BaseSettings):
+    """Optional LangFuse sink for human-annotation scores.
+
+    Loaded from `LANGFUSE_*` env vars. When `enabled=False` (or any required
+    field is missing) the sink becomes a no-op and the LangFuse panel is hidden
+    from the UI — so the app runs fine without LangFuse installed.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="LANGFUSE_",
+        env_file=_env_file_candidates(),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(default=False, description="Feature flag for the LangFuse integration.")
+    host: str = Field(default="https://cloud.langfuse.com", description="LangFuse base URL.")
+    public_key: SecretStr | None = Field(default=None, description="LangFuse public key.")
+    secret_key: SecretStr | None = Field(default=None, description="LangFuse secret key.")
+
+    def is_configured(self) -> bool:
+        """True when the sink has all credentials AND is enabled."""
+        return bool(self.enabled and self.public_key and self.secret_key)
+
+
 class AppConfig(BaseModel):
     """The full runtime config — what the UI saves and the orchestrator reads."""
 
     arango: ArangoConfig
     llm: LLMConfig
     eval: EvalConfig = Field(default_factory=EvalConfig)
+    rag_eval: RagEvalConfig = Field(default_factory=RagEvalConfig)
+    langfuse: LangFuseConfig = Field(default_factory=LangFuseConfig)
 
     @classmethod
     def from_env(cls) -> AppConfig:
         """Build an `AppConfig` reading env / `.env` / `./env` for arango+llm."""
-        return cls(arango=ArangoConfig(), llm=LLMConfig(), eval=EvalConfig())
+        return cls(
+            arango=ArangoConfig(),
+            llm=LLMConfig(),
+            eval=EvalConfig(),
+            rag_eval=RagEvalConfig(),
+            langfuse=LangFuseConfig(),
+        )
 
     def to_safe_dict(self) -> dict[str, Any]:
         """Serialise without secrets — safe to log or display."""
         d = self.model_dump()
         d["arango"]["password"] = "***"
         d["llm"]["api_key"] = "***"
+        if d.get("langfuse"):
+            d["langfuse"]["public_key"] = "***"
+            d["langfuse"]["secret_key"] = "***"
         return d
