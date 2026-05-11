@@ -20,6 +20,7 @@ from multihop_eval.personas import DEFAULT_PERSONAS
 from multihop_eval.pipeline import EvaluationOrchestrator
 from multihop_eval.rubric import DEFAULT_RUBRIC
 from multihop_eval.rubric_evaluator import RubricEvaluator
+from multihop_eval.run_control import RunControl
 from tests.conftest import FakeArangoGateway, FakeLLMClient
 
 
@@ -243,3 +244,92 @@ def test_orchestrator_calls_rubric_evaluator_per_accepted():
     for f in DEFAULT_RUBRIC:
         assert f.name in accepted.rubric_scores
     assert accepted.rubric_weighted_score is not None
+
+
+def test_orchestrator_exits_early_when_stop_is_requested_before_run():
+    """A pre-stopped `RunControl` should cause the orchestrator to short-circuit
+    its seed loops and return a partial `RunResult` with no acceptances. The
+    final emitted event must be `run_stopped` (not `run_done`) so the UI can
+    surface the stoppage distinctly."""
+    arango = _seed_arango()
+    cfg = _config(target=2)
+
+    class _LLMShim:
+        def __init__(self, fake):
+            self._fake = fake
+
+        def call(self, sys, usr, *, max_tokens=None, temperature=None):
+            return self._fake.call(sys, usr, max_tokens=max_tokens, temperature=temperature)
+
+    # No LLM responses: if the stop signal is honored, no LLM calls are made.
+    fake_llm = FakeLLMClient(responses=[])
+    orchestrator = EvaluationOrchestrator(
+        gateway=arango,  # type: ignore[arg-type]
+        llm=_LLMShim(fake_llm),  # type: ignore[arg-type]
+        eval_config=cfg.eval,
+        rubric_evaluator=None,
+    )
+
+    control = RunControl()
+    control.request_stop()
+
+    events: list[RunEvent] = []
+    result = orchestrator.run(on_event=events.append, control=control)
+
+    assert result.accepted == []
+    assert fake_llm.calls == [], "Pipeline must not invoke the LLM after stop is requested."
+    kinds = [e.kind for e in events]
+    assert "run_stopped" in kinds
+    assert "run_done" not in kinds
+
+
+def test_orchestrator_stop_request_mid_run_yields_partial_result():
+    """Simulate a stop request between Pass 1 and Pass 2: Pass 1 should
+    accept what it can, then Pass 2 should be skipped entirely once stop is
+    set. The final event must be `run_stopped`."""
+    arango = _seed_arango()
+    cfg = _config(target=1)
+
+    class _LLMShim:
+        def __init__(self, fake):
+            self._fake = fake
+
+        def call(self, sys, usr, *, max_tokens=None, temperature=None):
+            return self._fake.call(sys, usr, max_tokens=max_tokens, temperature=temperature)
+
+    # Enough scripted responses for Pass 1 to accept exactly one row.
+    fake_llm = FakeLLMClient(
+        responses=[
+            _good_gen_response(["src/a", "src/b"]),
+            _multihop_pass(2),
+            _proof_pass(["src/a", "src/b"]),
+        ]
+    )
+    orchestrator = EvaluationOrchestrator(
+        gateway=arango,  # type: ignore[arg-type]
+        llm=_LLMShim(fake_llm),  # type: ignore[arg-type]
+        eval_config=cfg.eval,
+        rubric_evaluator=None,
+    )
+
+    # Trigger stop the first time the orchestrator emits a `pass_done`
+    # event — i.e. between Pass 1 and Pass 2. (The `cluster_test_0` cluster
+    # has only one cluster so Pass 2 would otherwise run as top-up.)
+    control = RunControl()
+    events: list[RunEvent] = []
+
+    def listener(ev: RunEvent) -> None:
+        events.append(ev)
+        if ev.kind == "pass_done" and ev.payload.get("pass") == 1:
+            control.request_stop()
+
+    result = orchestrator.run(on_event=listener, control=control)
+
+    kinds = [e.kind for e in events]
+    assert "run_stopped" in kinds
+    assert "run_done" not in kinds
+    pass_numbers = {e.payload["pass"] for e in events if e.kind == "pass_done"}
+    assert 1 in pass_numbers
+    assert 2 not in pass_numbers, "Pass 2 should be skipped once stop is requested."
+    # Pass 1 should still have produced at least one acceptance.
+    assert len(result.accepted) >= 1

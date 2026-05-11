@@ -19,6 +19,7 @@ from typing import Any
 
 from multihop_eval.config import AppConfig
 from multihop_eval.models import RunEvent, RunResult
+from multihop_eval.run_control import RunControl
 
 # Streamlit session-state keys — keep them in one place to avoid typos.
 KEY_APP_CONFIG = "app_config"
@@ -27,7 +28,8 @@ KEY_RUN_QUEUE = "run_queue"
 KEY_RUN_RESULT = "run_result"
 KEY_RUN_ERROR = "run_error"
 KEY_RUN_EVENTS = "run_events"
-KEY_RUN_STATUS = "run_status"  # 'idle' | 'running' | 'done' | 'error'
+KEY_RUN_STATUS = "run_status"  # 'idle' | 'running' | 'paused' | 'done' | 'stopped' | 'error'
+KEY_SHOW_STOP_MODAL = "show_stop_modal"
 
 
 @dataclass
@@ -36,10 +38,15 @@ class RunHandle:
 
     Stored on `st.session_state` as a single value so we don't pollute the
     namespace with five keys per run.
+
+    `control` is the cooperative pause/stop coordinator the UI uses to ask
+    the pipeline to pause (while the user is interacting with the stop
+    confirmation modal) or stop (when they confirm).
     """
 
     thread: threading.Thread
     event_queue: queue.Queue[RunEvent]
+    control: RunControl = field(default_factory=RunControl)
     events: list[RunEvent] = field(default_factory=list)
     result: RunResult | None = None
     error: BaseException | None = None
@@ -60,24 +67,28 @@ class RunHandle:
 
 def start_run(
     app_config: AppConfig,
-    runner: Callable[[AppConfig, Callable[[RunEvent], None]], RunResult],
+    runner: Callable[[AppConfig, Callable[[RunEvent], None], RunControl], RunResult],
 ) -> RunHandle:
-    """Spawn a daemon thread that calls `runner(app_config, on_event)`.
+    """Spawn a daemon thread that calls `runner(app_config, on_event, control)`.
 
     `runner` is the seam tests and the UI both use — it can be a lambda that
-    builds the orchestrator and calls `.run(on_event=...)` or any other
-    function with the same signature.
+    builds the orchestrator and calls `.run(on_event=..., control=...)` or
+    any other function with the same signature.
+
+    A fresh `RunControl` is created per run and stashed on the returned
+    `RunHandle.control`; the UI uses it to pause/stop the worker thread.
     """
     q: queue.Queue[RunEvent] = queue.Queue()
-    handle = RunHandle(thread=None, event_queue=q)  # type: ignore[arg-type]
+    control = RunControl()
+    handle = RunHandle(thread=None, event_queue=q, control=control)  # type: ignore[arg-type]
 
     def _push(ev: RunEvent) -> None:
         q.put_nowait(ev)
 
     def _target() -> None:
         try:
-            handle.result = runner(app_config, _push)
-            handle.status = "done"
+            handle.result = runner(app_config, _push, control)
+            handle.status = "stopped" if control.is_stop_requested else "done"
         except BaseException as exc:  # pragma: no cover - happy path tested
             handle.error = exc
             handle.status = "error"
@@ -118,6 +129,11 @@ def event_to_log_line(ev: RunEvent) -> str:
             f"{ts}  RUN COMPLETE — accepted={p['total_accepted']} "
             f"rejected={p['total_rejected']} duration={p['duration_s']:.1f}s"
         )
+    if ev.kind == "run_stopped":
+        return (
+            f"{ts}  RUN STOPPED — accepted={p['total_accepted']} "
+            f"rejected={p['total_rejected']} duration={p['duration_s']:.1f}s"
+        )
     if ev.kind == "error":
         return f"{ts}  error in {p.get('stage','?')}: {p.get('error','')}"
     return f"{ts}  {ev.kind}: {p}"
@@ -152,6 +168,7 @@ def init_session_state(st_module: Any) -> None:
         KEY_RUN_ERROR: None,
         KEY_RUN_EVENTS: [],
         KEY_RUN_STATUS: "idle",
+        KEY_SHOW_STOP_MODAL: False,
     }
     for k, v in defaults.items():
         if k not in st_module.session_state:

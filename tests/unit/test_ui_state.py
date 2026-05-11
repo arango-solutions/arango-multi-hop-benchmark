@@ -57,12 +57,24 @@ def test_event_to_log_line_renders_each_kind():
         RunEvent(kind="rejected", payload={"seed_doc_id": "src/bbb", "reason": "multihop_below_floor"}),
         RunEvent(kind="pass_done", payload={"pass": 1, "total_accepted": 5}),
         RunEvent(kind="run_done", payload={"total_accepted": 5, "total_rejected": 2, "duration_s": 12.34}),
+        RunEvent(kind="run_stopped", payload={"total_accepted": 3, "total_rejected": 1, "duration_s": 4.20}),
         RunEvent(kind="error", payload={"stage": "rubric", "error": "oops"}),
     ]
     for ev in samples:
         line = event_to_log_line(ev)
         assert isinstance(line, str)
         assert len(line) > 0
+
+
+def test_event_to_log_line_distinguishes_stopped_from_done():
+    done = event_to_log_line(
+        RunEvent(kind="run_done", payload={"total_accepted": 5, "total_rejected": 2, "duration_s": 12.34})
+    )
+    stopped = event_to_log_line(
+        RunEvent(kind="run_stopped", payload={"total_accepted": 3, "total_rejected": 1, "duration_s": 4.2})
+    )
+    assert "RUN COMPLETE" in done
+    assert "RUN STOPPED" in stopped
 
 
 def test_start_run_executes_runner_and_returns_result():
@@ -86,7 +98,7 @@ def test_start_run_executes_runner_and_returns_result():
         finished_at=datetime.now(UTC),
     )
 
-    def runner(cfg, on_event):
+    def runner(cfg, on_event, control):
         on_event(RunEvent(kind="run_done", payload={"total_accepted": 1, "total_rejected": 0, "duration_s": 0.1}))
         return finished_result
 
@@ -102,7 +114,7 @@ def test_start_run_executes_runner_and_returns_result():
 
 
 def test_start_run_records_error_when_runner_raises():
-    def runner(cfg, on_event):
+    def runner(cfg, on_event, control):
         raise RuntimeError("boom")
 
     handle = start_run(_cfg(), runner)
@@ -111,3 +123,60 @@ def test_start_run_records_error_when_runner_raises():
         time.sleep(0.01)
     assert handle.status == "error"
     assert isinstance(handle.error, RuntimeError)
+
+
+def test_start_run_marks_status_stopped_when_control_requested_stop():
+    """If the runner observes a stop request, `RunHandle.status` should be 'stopped'."""
+    finished_result = RunResult(
+        accepted=[],
+        rejected=[],
+        cluster_targets={},
+        cluster_achieved={},
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+    )
+
+    def runner(cfg, on_event, control):
+        # Simulate the worker observing the stop signal at a checkpoint.
+        control.request_stop()
+        return finished_result
+
+    handle = start_run(_cfg(), runner)
+    deadline = time.time() + 2.0
+    while handle.thread.is_alive() and time.time() < deadline:
+        time.sleep(0.01)
+    assert handle.status == "stopped"
+    assert handle.result is finished_result
+
+
+def test_start_run_handle_carries_a_runcontrol():
+    """The handle exposes a `RunControl` so the UI can pause/stop the run.
+
+    The worker polls the control on a tight loop and exits when stop is set,
+    which both proves the control is wired through `start_run` and avoids a
+    pause/resume race against the test thread.
+    """
+
+    def runner(cfg, on_event, control):
+        deadline = time.time() + 2.0
+        while not control.is_stop_requested and time.time() < deadline:
+            time.sleep(0.01)
+        return RunResult(
+            accepted=[],
+            rejected=[],
+            cluster_targets={},
+            cluster_achieved={},
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
+        )
+
+    handle = start_run(_cfg(), runner)
+    assert handle.control is not None
+    handle.control.request_stop()
+
+    deadline = time.time() + 2.0
+    while handle.thread.is_alive() and time.time() < deadline:
+        time.sleep(0.01)
+    assert handle.thread.is_alive() is False
+    assert handle.control.is_stop_requested is True
+    assert handle.status == "stopped"

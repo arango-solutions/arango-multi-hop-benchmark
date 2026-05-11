@@ -44,6 +44,7 @@ from multihop_eval.prompts import (
     build_verify_prompt,
 )
 from multihop_eval.rubric_evaluator import RubricEvaluator
+from multihop_eval.run_control import RunControl
 from multihop_eval.subgraph import build_subgraph, pick_subgraph_size
 
 log = logging.getLogger(__name__)
@@ -274,8 +275,15 @@ class ClusterProcessor:
         cached_cluster_ids: set[str] | None = None,
         on_event: OnEvent | None = None,
         global_so_far: int = 0,
+        control: RunControl | None = None,
     ) -> tuple[list[AcceptedQA], list[RejectedQA], set[str]]:
-        """Generate up to `target` accepted QA pairs from this cluster."""
+        """Generate up to `target` accepted QA pairs from this cluster.
+
+        If `control` is supplied, the seed loop checks it at the top of each
+        iteration: a paused control blocks until released, and a stop
+        request causes the loop to exit early (returning whatever was
+        accepted so far).
+        """
         partition_id = (
             cached_partition_id
             if cached_partition_id is not None
@@ -315,6 +323,9 @@ class ClusterProcessor:
 
         for seed_idx, seed_doc_id in enumerate(seeds):
             if len(accepted) >= target:
+                break
+            if control is not None and control.wait_if_paused():
+                log.info("Stop requested — exiting cluster %s seed loop early.", cluster_id)
                 break
             seen_seeds.add(seed_doc_id)
 
@@ -457,8 +468,20 @@ class EvaluationOrchestrator:
             llm=llm, max_verify_rounds=eval_config.max_verify_rounds
         )
 
-    def run(self, *, on_event: OnEvent | None = None) -> RunResult:
-        """Execute Pass 1 + Pass 2, optionally score with rubric + persist."""
+    def run(
+        self,
+        *,
+        on_event: OnEvent | None = None,
+        control: RunControl | None = None,
+    ) -> RunResult:
+        """Execute Pass 1 + Pass 2, optionally score with rubric + persist.
+
+        If `control` is provided, the orchestrator consults it at safe
+        checkpoints (between clusters and inside each cluster's seed loop).
+        On a stop request the orchestrator returns the partial `RunResult`
+        accumulated so far and emits a `run_stopped` event in lieu of
+        `run_done` so the UI can distinguish the two.
+        """
         started = datetime.now(UTC)
         rng = random.Random(self.eval_config.random_seed)
         processor = ClusterProcessor(
@@ -477,6 +500,9 @@ class EvaluationOrchestrator:
 
         # Pass 1
         for i, cid in enumerate(self.eval_config.target_clusters):
+            if control is not None and control.wait_if_paused():
+                log.info("Stop requested — exiting Pass 1 before cluster %s.", cid)
+                break
             partition_id = self.gateway.get_partition_id(cid)
             cluster_doc_ids_set = set(self.gateway.get_cluster_doc_ids(cid))
             target = self.eval_config.n_questions
@@ -490,6 +516,7 @@ class EvaluationOrchestrator:
                 cached_cluster_ids=cluster_doc_ids_set,
                 on_event=on_event,
                 global_so_far=len(all_accepted),
+                control=control,
             )
             self._post_process(accepted, on_event=on_event)
             all_accepted.extend(accepted)
@@ -505,15 +532,19 @@ class EvaluationOrchestrator:
 
         _emit(on_event, "pass_done", {"pass": 1, "total_accepted": len(all_accepted)})
 
-        # Pass 2 — top-up
+        # Pass 2 — top-up. Skip entirely if stop was requested during Pass 1.
+        stop_requested = control is not None and control.is_stop_requested
         shortfalls = {
             c: s for c, s in cluster_state.items() if s["achieved"] < s["target"]
         }
-        if shortfalls:
+        if shortfalls and not stop_requested:
             sorted_short = sorted(
                 shortfalls.items(), key=lambda x: -(x[1]["target"] - x[1]["achieved"])
             )
             for cid, s in sorted_short:
+                if control is not None and control.wait_if_paused():
+                    log.info("Stop requested — exiting Pass 2 before cluster %s.", cid)
+                    break
                 deficit = s["target"] - s["achieved"]
                 accepted, rejected, used_seeds = processor.process(
                     cluster_id=cid,
@@ -525,6 +556,7 @@ class EvaluationOrchestrator:
                     cached_cluster_ids=s["cluster_doc_ids_set"],
                     on_event=on_event,
                     global_so_far=len(all_accepted),
+                    control=control,
                 )
                 self._post_process(accepted, on_event=on_event)
                 all_accepted.extend(accepted)
@@ -542,9 +574,14 @@ class EvaluationOrchestrator:
             started_at=started,
             finished_at=finished,
         )
+        end_kind = (
+            "run_stopped"
+            if (control is not None and control.is_stop_requested)
+            else "run_done"
+        )
         _emit(
             on_event,
-            "run_done",
+            end_kind,
             {
                 "total_accepted": len(all_accepted),
                 "total_rejected": len(all_rejected),
