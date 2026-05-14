@@ -104,18 +104,18 @@ class ArangoConfig(BaseSettings):
 
     @model_validator(mode="after")
     def _auth_mode_requires_matching_credentials(self) -> ArangoConfig:
-        if self.auth_mode == AUTH_MODE_PASSWORD:
-            if self.password is None or not self.password.get_secret_value():
-                raise ValueError(
-                    "auth_mode='password' requires a non-empty password "
-                    "(set ARANGO_PASSWORD or pass `password=...`)."
-                )
-        elif self.auth_mode == AUTH_MODE_JWT:
-            if not self.jwt_token_path:
-                raise ValueError(
-                    "auth_mode='jwt' requires `jwt_token_path` "
-                    "(set ARANGO_TOKEN to the path of the rotating JWT file)."
-                )
+        if self.auth_mode == AUTH_MODE_PASSWORD and (
+            self.password is None or not self.password.get_secret_value()
+        ):
+            raise ValueError(
+                "auth_mode='password' requires a non-empty password "
+                "(set ARANGO_PASSWORD or pass `password=...`)."
+            )
+        if self.auth_mode == AUTH_MODE_JWT and not self.jwt_token_path:
+            raise ValueError(
+                "auth_mode='jwt' requires `jwt_token_path` "
+                "(set ARANGO_TOKEN to the path of the rotating JWT file)."
+            )
         return self
 
     @classmethod

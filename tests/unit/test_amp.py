@@ -175,6 +175,8 @@ def test_read_token_picks_up_rotated_value(tmp_path):
 
 def test_amp_env_is_immutable(tmp_path):
     """Dataclass is frozen so callers can't mutate it mid-flight."""
+    from dataclasses import FrozenInstanceError
+
     env = AmpEnv(endpoint="https://x:8529", token_path=str(tmp_path / "t"))
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         env.endpoint = "other"  # type: ignore[misc]

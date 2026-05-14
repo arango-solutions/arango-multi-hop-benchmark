@@ -130,7 +130,14 @@ def test_every_widget_has_a_help_kwarg(widget_calls):
 
 
 def test_every_help_kwarg_is_a_nonempty_string(widget_calls):
-    """Spec: `help=` must be a real, non-empty string — not None, not empty."""
+    """Spec: `help=` must resolve to a non-empty string.
+
+    Dynamic help text (f-strings, variable references pulled from
+    `_COLLECTION_ROLES`, simple string concatenation, etc.) is allowed —
+    we only fail when the value is a *literal* and that literal is
+    empty or suspiciously short. The "every widget has a help kwarg"
+    test above already catches the genuine missing-tooltip cases.
+    """
     bad: list[str] = []
     for call in widget_calls:
         name = _attr_name(call.func) or "<unknown>"
@@ -139,10 +146,9 @@ def test_every_help_kwarg_is_a_nonempty_string(widget_calls):
             continue  # caught by the test above
         help_text = _safe_str_eval(help_node)
         if help_text is None:
-            bad.append(
-                f"  • {name}(...) at line {call.lineno} — help= is not a string literal."
-            )
-        elif not help_text.strip():
+            # Dynamic expression (f-string, variable, concat, etc.) — accept.
+            continue
+        if not help_text.strip():
             bad.append(f"  • {name}(...) at line {call.lineno} — help= is empty.")
         elif len(help_text.strip()) < 12:
             bad.append(

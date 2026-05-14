@@ -36,6 +36,18 @@ KEY_RAG_EVAL_RUNS = "rag_eval_runs"  # dict[str, RagEvalRun] keyed by system_nam
 KEY_RAG_GOLDENS_CACHE = "rag_goldens_cache"  # list[dict] — fetched once, reused
 KEY_RAG_LOAD_ERRORS = "rag_load_errors"  # list[str] — last load's parse errors
 
+# Connection-panel session state — populated by the Configure tab and read
+# by every other tab so they can gate their actions on a live connection.
+KEY_ARANGO_GATEWAY = "arango_gateway"  # ArangoGateway | None
+KEY_ARANGO_DB = "arango_db"  # str | None — currently-selected database name
+KEY_ARANGO_COLLECTIONS = "arango_collections"  # list[CollectionInfo] | None
+KEY_ARANGO_CLUSTER_IDS = "arango_cluster_ids"  # list[str] | None
+KEY_ARANGO_DB_LIST = "arango_db_list"  # list[str] | None — cached DB picker options
+KEY_ARANGO_CONN_STATUS = "arango_conn_status"  # 'disconnected' | 'connected_amp' | 'connected_manual' | 'error'
+KEY_ARANGO_CONN_ERROR = "arango_conn_error"  # str | None — last connection-time error
+KEY_ARANGO_AMP_ENV = "arango_amp_env"  # AmpEnv | None — cached AMP detection
+KEY_ARANGO_LAST_TESTED = "arango_last_tested"  # ISO timestamp of last successful ping
+
 
 @dataclass
 class RunHandle:
@@ -177,6 +189,15 @@ def init_session_state(st_module: Any) -> None:
         KEY_RAG_EVAL_RUNS: {},
         KEY_RAG_GOLDENS_CACHE: None,
         KEY_RAG_LOAD_ERRORS: [],
+        KEY_ARANGO_GATEWAY: None,
+        KEY_ARANGO_DB: None,
+        KEY_ARANGO_COLLECTIONS: None,
+        KEY_ARANGO_CLUSTER_IDS: None,
+        KEY_ARANGO_DB_LIST: None,
+        KEY_ARANGO_CONN_STATUS: "disconnected",
+        KEY_ARANGO_CONN_ERROR: None,
+        KEY_ARANGO_AMP_ENV: None,
+        KEY_ARANGO_LAST_TESTED: None,
     }
     for k, v in defaults.items():
         if k not in st_module.session_state:
