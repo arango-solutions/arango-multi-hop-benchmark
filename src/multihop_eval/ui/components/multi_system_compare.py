@@ -18,6 +18,7 @@ import pandas as pd
 import streamlit as st
 
 from multihop_eval.rag_eval.models import RagEvalRun
+from multihop_eval.ui.theme import avocado_color_scale
 
 
 def _runs_to_long_df(runs: list[RagEvalRun]) -> pd.DataFrame:
@@ -63,7 +64,7 @@ def _grouped_bar_chart(df: pd.DataFrame, *, group: str) -> alt.Chart:
         .encode(
             x=alt.X("metric:N", sort="-y", title="metric"),
             y=alt.Y("value:Q", title="value"),
-            color=alt.Color("system:N", title="system"),
+            color=alt.Color("system:N", title="system", scale=avocado_color_scale()),
             xOffset="system:N",
             tooltip=["system", "metric", alt.Tooltip("value:Q", format=".3f")],
         )

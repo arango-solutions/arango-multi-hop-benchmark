@@ -23,18 +23,54 @@ from multihop_eval.ui.components.rag_eval_tab import render_rag_eval_tab
 from multihop_eval.ui.components.run_progress import render_run_tab
 from multihop_eval.ui.components.summary_dashboard import render_dashboard_tab
 from multihop_eval.ui.state import init_session_state
+from multihop_eval.ui.theme import (
+    AVOCADO_PRIMARY,
+    AVOCADO_SHADE_DEEP,
+    AVOCADO_SHADE_MID,
+    apply_altair_theme,
+)
 
 st.set_page_config(
     page_title="Multi-Hop Eval",
-    page_icon=":crystal_ball:",
+    page_icon=":avocado:",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# Streamlit's config.toml repaints widgets, but a few things (tab underlines,
+# headline accent bar, link colour) only respond to inline CSS. Keep this
+# block tiny and palette-only — anything richer should live in theme.py.
+_AVOCADO_CSS = f"""
+<style>
+  :root {{
+    --avocado-primary: {AVOCADO_PRIMARY};
+    --avocado-shade-mid: {AVOCADO_SHADE_MID};
+    --avocado-shade-deep: {AVOCADO_SHADE_DEEP};
+  }}
+  /* Tab row: underline the active tab in avocado green. */
+  .stTabs [data-baseweb="tab-highlight"] {{
+    background-color: var(--avocado-primary) !important;
+  }}
+  .stTabs [aria-selected="true"] {{
+    color: var(--avocado-shade-deep) !important;
+  }}
+  /* Headlines lean into the avocado palette. */
+  h1, h2, h3 {{
+    color: var(--avocado-shade-deep);
+  }}
+  /* Inline links pick up the brand colour. */
+  a, a:visited {{
+    color: var(--avocado-shade-mid);
+  }}
+</style>
+"""
 
 
 def main() -> None:
     configure_logging("INFO")
     init_session_state(st)
+    apply_altair_theme()
+    st.markdown(_AVOCADO_CSS, unsafe_allow_html=True)
 
     st.title("Multi-Hop QA Eval")
     st.caption(

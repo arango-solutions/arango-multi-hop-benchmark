@@ -1,0 +1,16 @@
+# Streamlit theme — "Avocado" palette for the Arango multi-hop eval plugin.
+#
+# All hex codes here come from the published avocado-green palette
+# (https://www.figma.com/colors/avocado-green/) except `secondaryBackgroundColor`,
+# which is a deliberately desaturated tint of #DAFD9A (lightest avocado tint)
+# mixed ~50% with white so sidebars / info banners don't outshout content.
+#
+# Mirror in `multihop_eval.ui.theme`; update both together.
+
+[theme]
+base = "light"
+primaryColor = "#568203"            # Avocado green (brand anchor)
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F7DD"  # softened tint of #DAFD9A
+textColor = "#1D2B01"               # Avocado shade #7 (deep, near-black)
+font = "sans serif"
