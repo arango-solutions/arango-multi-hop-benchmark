@@ -43,7 +43,6 @@ from multihop_eval.ui.state import (
     KEY_ARANGO_LAST_TESTED,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
@@ -302,3 +301,17 @@ def test_refresh_db_list_propagates_listing(st_stub):
     out = connection_panel._refresh_db_list(gw)  # type: ignore[arg-type]
     assert out == ["_system", "acme", "blanket"]
     assert st_stub.session_state[KEY_ARANGO_DB_LIST] == out
+
+
+def test_refresh_db_list_recovers_when_listing_raises(st_stub):
+    """`list_databases` returning [] (e.g. driver couldn't reach a non-_system DB)
+    is rescued by falling back to the currently-connected DB name."""
+    gw = _FakeGateway(config=SimpleNamespace(db="acme"))
+
+    def _raises() -> list[str]:
+        raise RuntimeError("perm denied")
+
+    gw.list_databases = _raises  # type: ignore[attr-defined]
+    out = connection_panel._refresh_db_list(gw)  # type: ignore[arg-type]
+    assert out == ["acme"]
+    assert st_stub.session_state[KEY_ARANGO_DB_LIST] == ["acme"]

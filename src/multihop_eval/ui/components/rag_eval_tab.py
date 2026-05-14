@@ -43,6 +43,11 @@ from multihop_eval.rag_eval.langfuse_sink import LangFuseSink
 from multihop_eval.rag_eval.models import RagEvalRun, RagResponse
 from multihop_eval.rag_eval.pipeline import RagEvalOrchestrator
 from multihop_eval.rag_eval.sources.jsonl_source import load_responses as load_jsonl
+from multihop_eval.ui.components.connection_panel import (
+    get_live_collections,
+    get_live_gateway,
+    refresh_collections,
+)
 from multihop_eval.ui.components.multi_system_compare import render_comparison
 from multihop_eval.ui.state import (
     KEY_APP_CONFIG,
@@ -50,6 +55,19 @@ from multihop_eval.ui.state import (
     KEY_RAG_GOLDENS_CACHE,
     KEY_RAG_LOAD_ERRORS,
 )
+
+
+def _gateway_for(app_config: AppConfig) -> ArangoGateway:
+    """Return the live session gateway when available; otherwise build one.
+
+    Reuses the already-pinged connection so we don't rebuild the python-arango
+    client on every Streamlit rerun. Falls back to a fresh `ArangoGateway`
+    when the user never visited the Configure tab in this session.
+    """
+    live = get_live_gateway()
+    if live is not None:
+        return live
+    return ArangoGateway(app_config.arango)
 
 
 def _goldens_section(app_config: AppConfig) -> list[dict] | None:
@@ -72,7 +90,7 @@ def _goldens_section(app_config: AppConfig) -> list[dict] | None:
     cols[1].metric("Cached", len(cached) if cached else 0)
     if fetch:
         try:
-            gateway = ArangoGateway(app_config.arango)
+            gateway = _gateway_for(app_config)
             cached = gateway.fetch_goldens_with_keys()
             st.session_state[KEY_RAG_GOLDENS_CACHE] = cached
             st.success(f"Loaded {len(cached)} golden rows.")
@@ -245,21 +263,14 @@ def _response_source_section(
             f"{len({r['system_name'] for r in responses})} system(s)."
         )
     else:  # Arango
-        coll = st.text_input(
-            "Arango response collection",
-            value=cfg.response_arango_collection,
-            help=(
-                "Name of the Arango collection holding the RAG responses. The "
-                "collection's rows must match the same shape as the JSONL contract."
-            ),
-        )
+        coll = _response_collection_picker(cfg.response_arango_collection)
         cfg = cfg.model_copy(update={"response_arango_collection": coll})
         if st.button(
             "Load responses from Arango",
             help="Read every response row from the named collection.",
         ):
             try:
-                gateway = ArangoGateway(app_config.arango)
+                gateway = _gateway_for(app_config)
                 orch = RagEvalOrchestrator(cfg)
                 responses_list = orch.load_responses(arango_gateway=gateway)
                 responses = [r.model_dump() for r in responses_list]
@@ -269,6 +280,54 @@ def _response_source_section(
         else:
             responses = st.session_state.get("_rag_arango_responses", [])
     return cfg, responses
+
+
+def _response_collection_picker(current_name: str) -> str:
+    """Return the collection name for RAG responses.
+
+    Renders a selectbox populated by the live gateway when available
+    (with a "+ new collection..." escape hatch so people can create a
+    fresh one), and falls back to a plain text input when disconnected.
+    """
+    gateway = get_live_gateway()
+    if gateway is None:
+        return st.text_input(
+            "Arango response collection",
+            value=current_name,
+            help=(
+                "Name of the Arango collection holding the RAG responses. "
+                "Connect on the Configure tab to pick from a live list."
+            ),
+        )
+
+    if not get_live_collections():
+        refresh_collections(gateway)
+    available = [c.name for c in get_live_collections()]
+    custom_option = "<other / new collection...>"
+    options = [*available, custom_option]
+    default = current_name if current_name in available else custom_option
+    chosen = st.selectbox(
+        "Arango response collection",
+        options=options,
+        index=options.index(default),
+        help=(
+            "Pick the live Arango collection that holds the RAG responses. "
+            "Pick the bottom option to type a fresh name; it will be created "
+            "the first time the orchestrator writes to it."
+        ),
+        key="rag_response_coll_picker",
+    )
+    if chosen == custom_option:
+        return st.text_input(
+            "New response collection name",
+            value=current_name,
+            help=(
+                "Name a brand-new collection. The orchestrator will create "
+                "it lazily on first write."
+            ),
+            key="rag_response_coll_new",
+        )
+    return chosen
 
 
 def _render_system_block(run: RagEvalRun) -> None:
