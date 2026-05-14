@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,10 +24,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from multihop_eval.generation.personas import DEFAULT_PERSONAS, Persona
 from multihop_eval.generation.rubric import DEFAULT_RUBRIC, RubricField
 
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from multihop_eval.clients.amp import AmpEnv
+
 RAG_RESPONSE_SOURCE_JSONL = "jsonl"
 RAG_RESPONSE_SOURCE_ARANGO = "arango"
 RAG_RELEVANCE_BINARY = "binary"
 RAG_RELEVANCE_GRADED = "graded"
+
+AUTH_MODE_PASSWORD = "password"
+AUTH_MODE_JWT = "jwt"
 
 
 def _env_file_candidates() -> tuple[str, ...]:
@@ -42,7 +48,17 @@ def _env_file_candidates() -> tuple[str, ...]:
 
 
 class ArangoConfig(BaseSettings):
-    """Connection details + every collection used by the pipeline."""
+    """Connection details + every collection used by the pipeline.
+
+    Two auth modes are supported:
+
+    * ``auth_mode="password"`` (default): classic username + password, as
+      used by the manual config form and the original `.env` flow.
+    * ``auth_mode="jwt"``: the AMP/BYOC path. The gateway reads a JWT from
+      ``jwt_token_path`` on every connection so that rotation by the
+      kube-arangodb sidecar is transparent. ``password`` is not required
+      in this mode.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="ARANGO_",
@@ -54,7 +70,20 @@ class ArangoConfig(BaseSettings):
     host: str = Field(..., description="ArangoDB HTTP host, e.g. https://my-cluster.example.com")
     db: str = Field(..., description="Database name")
     username: str = Field(default="root")
-    password: SecretStr = Field(...)
+    password: SecretStr | None = Field(default=None)
+
+    auth_mode: Literal["password", "jwt"] = Field(
+        default=AUTH_MODE_PASSWORD,
+        description="'password' = username/password auth; 'jwt' = read rotating JWT from disk.",
+    )
+    jwt_token_path: str | None = Field(
+        default=None,
+        description="Path to the JWT file (rotated by the AMP sidecar). Required when auth_mode='jwt'.",
+    )
+    ca_cert_path: str | None = Field(
+        default=None,
+        description="Optional path to the deployment's CA PEM (used to verify TLS in AMP).",
+    )
 
     similarity_collection: str = "multihop_eval_similarities"
     relations_collection: str = "multihop_eval_corpus_relations"
@@ -72,6 +101,50 @@ class ArangoConfig(BaseSettings):
         if "://" not in cleaned:
             raise ValueError(f"Arango host must include scheme (http:// or https://): {value!r}")
         return cleaned
+
+    @model_validator(mode="after")
+    def _auth_mode_requires_matching_credentials(self) -> ArangoConfig:
+        if self.auth_mode == AUTH_MODE_PASSWORD:
+            if self.password is None or not self.password.get_secret_value():
+                raise ValueError(
+                    "auth_mode='password' requires a non-empty password "
+                    "(set ARANGO_PASSWORD or pass `password=...`)."
+                )
+        elif self.auth_mode == AUTH_MODE_JWT:
+            if not self.jwt_token_path:
+                raise ValueError(
+                    "auth_mode='jwt' requires `jwt_token_path` "
+                    "(set ARANGO_TOKEN to the path of the rotating JWT file)."
+                )
+        return self
+
+    @classmethod
+    def from_amp(
+        cls,
+        amp: AmpEnv,
+        db: str,
+        *,
+        username: str = "root",
+        collections: dict[str, str] | None = None,
+    ) -> ArangoConfig:
+        """Build a JWT-mode `ArangoConfig` from a detected AMP environment.
+
+        `collections` lets callers override individual collection names
+        (e.g. after the user picked them from the live UI selectboxes);
+        anything not supplied keeps its class default.
+        """
+        kwargs: dict[str, Any] = {
+            "host": amp.endpoint,
+            "db": db,
+            "username": username,
+            "auth_mode": AUTH_MODE_JWT,
+            "jwt_token_path": amp.token_path,
+            "ca_cert_path": amp.ca_path,
+        }
+        for key, value in (collections or {}).items():
+            if value:
+                kwargs[key] = value
+        return cls(**kwargs)  # type: ignore[arg-type]
 
 
 class LLMConfig(BaseSettings):
@@ -289,7 +362,9 @@ class AppConfig(BaseModel):
     def to_safe_dict(self) -> dict[str, Any]:
         """Serialise without secrets — safe to log or display."""
         d = self.model_dump()
-        d["arango"]["password"] = "***"
+        # Password is None in jwt mode; only redact when we actually had one.
+        if d["arango"].get("password") is not None:
+            d["arango"]["password"] = "***"
         d["llm"]["api_key"] = "***"
         if d.get("langfuse"):
             d["langfuse"]["public_key"] = "***"
