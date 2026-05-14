@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from arango import ArangoClient
 
-from multihop_eval.config import ArangoConfig
+from multihop_eval.clients.amp import read_token
+from multihop_eval.config import AUTH_MODE_JWT, AUTH_MODE_PASSWORD, ArangoConfig
 
 if TYPE_CHECKING:
     from arango.database import StandardDatabase  # pragma: no cover
@@ -24,16 +26,56 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class CollectionInfo:
+    """Lightweight description of an Arango collection.
+
+    Powers the UI selectboxes (we want to show doc counts next to each
+    name so the user can sanity-check their picks).
+    """
+
+    name: str
+    doc_count: int
+    kind: str  # "document" or "edge"
+    system: bool
+
+
 class ArangoGateway:
-    """Thin layer over `python-arango` exposing only what the pipeline needs."""
+    """Thin layer over `python-arango` exposing only what the pipeline needs.
+
+    Supports two auth modes:
+
+    * ``ArangoConfig.auth_mode == "password"``: classic username + password.
+    * ``ArangoConfig.auth_mode == "jwt"``: the AMP path. The JWT is read
+      from ``config.jwt_token_path`` at construction and again whenever
+      `refresh_token()` is called. This makes the rotating-token contract
+      from the kube-arangodb sidecar transparent to callers.
+    """
 
     def __init__(self, config: ArangoConfig, *, client: ArangoClient | None = None) -> None:
         self.config = config
         self._client = client or ArangoClient(hosts=config.host)
-        self._db: StandardDatabase = self._client.db(
-            config.db,
-            username=config.username,
-            password=config.password.get_secret_value(),
+        self._db: StandardDatabase = self._connect_db(config.db)
+
+    def _connect_db(self, db_name: str) -> StandardDatabase:
+        """Open a DB handle using whichever auth mode is configured."""
+        if self.config.auth_mode == AUTH_MODE_JWT:
+            if not self.config.jwt_token_path:
+                # Defensive: the model validator already rejects this, but
+                # keep the error message useful if someone bypasses it.
+                raise ValueError(
+                    "ArangoConfig.auth_mode='jwt' requires jwt_token_path."
+                )
+            token = read_token(self.config.jwt_token_path)
+            return self._client.db(db_name, user_token=token)
+        if self.config.password is None:
+            raise ValueError(
+                "ArangoConfig.auth_mode='password' requires a password."
+            )
+        return self._client.db(
+            db_name,
+            username=self.config.username,
+            password=self.config.password.get_secret_value(),
         )
 
     # ------------------------------------------------------------------
@@ -48,6 +90,115 @@ class ArangoGateway:
         except Exception as exc:  # pragma: no cover - exercised in integration only
             log.warning("Arango ping failed: %s", exc)
             return False
+
+    def refresh_token(self) -> None:
+        """Re-read the JWT from disk and push it onto the live connection.
+
+        No-op in password mode. Used by the UI to keep long-lived
+        Streamlit sessions working as the AMP sidecar rotates the token.
+        """
+        if self.config.auth_mode != AUTH_MODE_JWT:
+            return
+        if not self.config.jwt_token_path:  # pragma: no cover - validator caught
+            return
+        new_token = read_token(self.config.jwt_token_path)
+        conn = getattr(self._db, "conn", None)
+        if conn is not None and hasattr(conn, "set_token"):
+            conn.set_token(new_token)
+        else:  # pragma: no cover - python-arango always exposes .conn.set_token
+            # Older builds or our fakes — rebuild the handle as a fallback.
+            self._db = self._client.db(self.config.db, user_token=new_token)
+
+    # ------------------------------------------------------------------
+    # Discovery (used by the live selectboxes in the Configure tab)
+    # ------------------------------------------------------------------
+
+    def list_databases(self) -> list[str]:
+        """Return the names of every database the current credentials can see.
+
+        Falls back to listing via the `_system` database when called from a
+        non-system DB and the underlying driver requires it.
+        """
+        candidates = self._db
+        try:
+            names = list(candidates.databases())
+        except Exception:
+            # Some drivers only expose `databases()` from `_system`; retry there.
+            system_db = self._client.db(
+                "_system",
+                **self._auth_kwargs(),
+            )
+            names = list(system_db.databases())
+        return sorted(n for n in names if n)
+
+    def list_collections(self, *, include_system: bool = False) -> list[CollectionInfo]:
+        """Return collections in the connected DB with name, kind, and doc count.
+
+        Doc counts are best-effort: when the driver doesn't expose `count`
+        we fall back to ``0`` rather than failing the entire listing.
+        """
+        try:
+            raw = list(self._db.collections())
+        except Exception as exc:  # pragma: no cover - exercised in integration only
+            log.warning("Failed to list collections: %s", exc)
+            return []
+        out: list[CollectionInfo] = []
+        for entry in raw:
+            name = entry.get("name", "")
+            if not name:
+                continue
+            is_system = bool(entry.get("system", name.startswith("_")))
+            if is_system and not include_system:
+                continue
+            # python-arango returns `type=2` for document, `type=3` for edge.
+            type_code = entry.get("type")
+            if type_code == 3 or entry.get("kind") == "edge":
+                kind = "edge"
+            else:
+                kind = "document"
+            try:
+                count = int(self._db.collection(name).count())
+            except Exception:  # pragma: no cover - permission/timeout guard
+                count = 0
+            out.append(CollectionInfo(name=name, doc_count=count, kind=kind, system=is_system))
+        return sorted(out, key=lambda c: c.name)
+
+    def list_cluster_ids(self, domains_collection: str) -> list[str]:
+        """Return distinct cluster ids (`_key`s) from the given domains collection.
+
+        Used to populate the target-clusters multiselect on the Configure
+        tab; returns an empty list when the collection is empty or
+        missing rather than raising — the UI falls back to a textarea.
+        """
+        if not domains_collection:
+            return []
+        query = """
+        FOR d IN @@coll
+            SORT d._key ASC
+            RETURN d._key
+        """
+        try:
+            rows = list(
+                self._db.aql.execute(
+                    query,
+                    bind_vars={"@coll": domains_collection},
+                )
+            )
+        except Exception as exc:
+            log.info("list_cluster_ids(%s) failed: %s", domains_collection, exc)
+            return []
+        return [r for r in rows if r]
+
+    def _auth_kwargs(self) -> dict[str, Any]:
+        """Return kwargs for `ArangoClient.db(...)` matching the configured auth mode."""
+        if self.config.auth_mode == AUTH_MODE_JWT and self.config.jwt_token_path:
+            return {"user_token": read_token(self.config.jwt_token_path)}
+        if self.config.auth_mode == AUTH_MODE_PASSWORD and self.config.password is not None:
+            return {
+                "username": self.config.username,
+                "password": self.config.password.get_secret_value(),
+            }
+        return {}  # pragma: no cover - validator catches this
 
     # ------------------------------------------------------------------
     # QA collection lifecycle

@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from multihop_eval.clients.arango_gateway import ArangoGateway
-from multihop_eval.config import ArangoConfig
+from multihop_eval.clients.arango_gateway import ArangoGateway, CollectionInfo
+from multihop_eval.config import AUTH_MODE_JWT, ArangoConfig
 
 # ---------------------------------------------------------------------------
 # Fake python-arango client tree
@@ -40,9 +40,23 @@ class _FakeAQL:
 @dataclass
 class _FakeCollectionAccess:
     inserts: list[dict[str, Any]] = field(default_factory=list)
+    doc_count: int = 0
 
     def insert(self, doc: dict[str, Any]) -> None:
         self.inserts.append(doc)
+
+    def count(self) -> int:
+        return self.doc_count
+
+
+@dataclass
+class _FakeConnection:
+    """Stand-in for python-arango's `db.conn` — tracks `set_token` calls."""
+
+    tokens: list[str] = field(default_factory=list)
+
+    def set_token(self, token: str) -> None:
+        self.tokens.append(token)
 
 
 @dataclass
@@ -50,7 +64,11 @@ class _FakeDatabase:
     aql: _FakeAQL = field(default_factory=_FakeAQL)
     existing_collections: set[str] = field(default_factory=set)
     created_collections: list[str] = field(default_factory=list)
-    collections: dict[str, _FakeCollectionAccess] = field(default_factory=dict)
+    collections_dict: dict[str, _FakeCollectionAccess] = field(default_factory=dict)
+    # Metadata used by list_collections (mimics python-arango shape).
+    collections_listing: list[dict[str, Any]] = field(default_factory=list)
+    databases_listing: list[str] = field(default_factory=list)
+    conn: _FakeConnection = field(default_factory=_FakeConnection)
 
     def has_collection(self, name: str) -> bool:
         return name in self.existing_collections
@@ -60,18 +78,26 @@ class _FakeDatabase:
         self.existing_collections.add(name)
 
     def collection(self, name: str) -> _FakeCollectionAccess:
-        return self.collections.setdefault(name, _FakeCollectionAccess())
+        return self.collections_dict.setdefault(name, _FakeCollectionAccess())
 
     def properties(self) -> dict[str, Any]:
         return {"name": "fakedb"}
+
+    def collections(self) -> list[dict[str, Any]]:
+        return list(self.collections_listing)
+
+    def databases(self) -> list[str]:
+        return list(self.databases_listing)
 
 
 @dataclass
 class _FakeArangoSDK:
     db_obj: _FakeDatabase
 
-    def db(self, name: str, *, username: str, password: str) -> _FakeDatabase:
-        self.db_obj.last_credentials = (name, username, password)  # type: ignore[attr-defined]
+    def db(self, name: str, **kwargs: Any) -> _FakeDatabase:
+        # Record the kwargs the caller used so tests can verify which auth
+        # path was taken.
+        self.db_obj.last_credentials = (name, kwargs)  # type: ignore[attr-defined]
         return self.db_obj
 
 
@@ -302,3 +328,114 @@ def test_fetch_rag_responses_applies_limit(gateway, db_obj):
 def test_list_rag_systems_returns_sorted_distinct(gateway, db_obj):
     db_obj.aql.scripts = [["rag_v2", "rag_v1", None]]
     assert gateway.list_rag_systems("rag_responses_v1") == ["rag_v1", "rag_v2"]
+
+
+# ---------------------------------------------------------------------------
+# Auth / discovery helpers (AMP path)
+# ---------------------------------------------------------------------------
+
+
+def test_password_mode_passes_username_and_password(cfg, db_obj):
+    sdk = _FakeArangoSDK(db_obj)
+    ArangoGateway(cfg, client=sdk)  # type: ignore[arg-type]
+    name, kwargs = db_obj.last_credentials  # type: ignore[attr-defined]
+    assert name == "testdb"
+    assert kwargs["username"] == "root"
+    assert kwargs["password"] == "secret"
+    assert "user_token" not in kwargs
+
+
+def test_jwt_mode_passes_user_token(tmp_path, db_obj):
+    token_path = tmp_path / "token"
+    token_path.write_text("jwt-abc", encoding="utf-8")
+    cfg = ArangoConfig(
+        host="https://x.example.com",
+        db="d",
+        auth_mode=AUTH_MODE_JWT,
+        jwt_token_path=str(token_path),
+    )  # type: ignore[call-arg]
+    sdk = _FakeArangoSDK(db_obj)
+    ArangoGateway(cfg, client=sdk)  # type: ignore[arg-type]
+    name, kwargs = db_obj.last_credentials  # type: ignore[attr-defined]
+    assert name == "d"
+    assert kwargs == {"user_token": "jwt-abc"}
+
+
+def test_refresh_token_reads_disk_and_pushes_to_connection(tmp_path, db_obj):
+    token_path = tmp_path / "token"
+    token_path.write_text("first", encoding="utf-8")
+    cfg = ArangoConfig(
+        host="https://x.example.com",
+        db="d",
+        auth_mode=AUTH_MODE_JWT,
+        jwt_token_path=str(token_path),
+    )  # type: ignore[call-arg]
+    gateway = ArangoGateway(cfg, client=_FakeArangoSDK(db_obj))  # type: ignore[arg-type]
+    # Simulate the sidecar rotating the file.
+    token_path.write_text("second", encoding="utf-8")
+    gateway.refresh_token()
+    assert db_obj.conn.tokens == ["second"]
+
+
+def test_refresh_token_is_noop_in_password_mode(gateway, db_obj):
+    gateway.refresh_token()
+    assert db_obj.conn.tokens == []
+
+
+def test_list_databases_returns_sorted_unique(gateway, db_obj):
+    db_obj.databases_listing = ["b", "_system", "a"]
+    assert gateway.list_databases() == ["_system", "a", "b"]
+
+
+def test_list_collections_filters_system_by_default(gateway, db_obj):
+    db_obj.collections_listing = [
+        {"name": "sources", "type": 2, "system": False},
+        {"name": "edges", "type": 3, "system": False},
+        {"name": "_users", "type": 2, "system": True},
+    ]
+    db_obj.collections_dict["sources"] = _FakeCollectionAccess(doc_count=42)
+    db_obj.collections_dict["edges"] = _FakeCollectionAccess(doc_count=7)
+    result = gateway.list_collections()
+    names = [c.name for c in result]
+    assert names == ["edges", "sources"]
+    kinds = {c.name: c.kind for c in result}
+    assert kinds == {"sources": "document", "edges": "edge"}
+    counts = {c.name: c.doc_count for c in result}
+    assert counts == {"sources": 42, "edges": 7}
+
+
+def test_list_collections_includes_system_when_requested(gateway, db_obj):
+    db_obj.collections_listing = [
+        {"name": "sources", "type": 2, "system": False},
+        {"name": "_users", "type": 2, "system": True},
+    ]
+    result = gateway.list_collections(include_system=True)
+    assert {c.name for c in result} == {"sources", "_users"}
+    sys_entry = next(c for c in result if c.name == "_users")
+    assert sys_entry.system is True
+
+
+def test_list_collections_returns_collection_info_dataclass(gateway, db_obj):
+    db_obj.collections_listing = [{"name": "x", "type": 2}]
+    result = gateway.list_collections()
+    assert isinstance(result[0], CollectionInfo)
+
+
+def test_list_cluster_ids_returns_keys(gateway, db_obj):
+    db_obj.aql.scripts = [["cluster_0", "cluster_1"]]
+    assert gateway.list_cluster_ids("dom") == ["cluster_0", "cluster_1"]
+    call = db_obj.aql.last_calls[0]
+    assert call["bind_vars"]["@coll"] == "dom"
+
+
+def test_list_cluster_ids_empty_for_empty_collection_name(gateway, db_obj):
+    assert gateway.list_cluster_ids("") == []
+    assert db_obj.aql.last_calls == []
+
+
+def test_list_cluster_ids_returns_empty_on_failure(gateway, db_obj):
+    def boom(*_a, **_k):
+        raise RuntimeError("missing collection")
+
+    db_obj.aql.execute = boom  # type: ignore[assignment]
+    assert gateway.list_cluster_ids("dom") == []
