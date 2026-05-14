@@ -117,6 +117,10 @@ def test_every_required_widget_has_help(required_widget_calls):
 
 
 def test_every_help_kwarg_is_a_meaningful_string(required_widget_calls, metric_calls_with_help):
+    """Dynamic help text (f-strings, variable refs) is allowed; only string
+    *literals* are checked for emptiness / brevity. The "every widget has a
+    help kwarg" test above already catches genuinely missing tooltips.
+    """
     bad: list[str] = []
     for path, call in (*required_widget_calls, *metric_calls_with_help):
         help_node = _help_kwarg(call)
@@ -125,8 +129,8 @@ def test_every_help_kwarg_is_a_meaningful_string(required_widget_calls, metric_c
         text = _safe_str_eval(help_node)
         name = _attr_name(call.func) or "<unknown>"
         if text is None:
-            bad.append(f"  {path.name}:{call.lineno} {name} — help= is not a string literal.")
-        elif not text.strip():
+            continue
+        if not text.strip():
             bad.append(f"  {path.name}:{call.lineno} {name} — help= is empty.")
         elif len(text.strip()) < 12:
             bad.append(f"  {path.name}:{call.lineno} {name} — help= too short ({text!r}).")

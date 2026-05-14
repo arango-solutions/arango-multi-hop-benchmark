@@ -144,7 +144,9 @@ def render_dashboard_tab() -> None:
             st.warning("Configure ArangoDB first.")
             return
         try:
-            gateway = ArangoGateway(cfg.arango)
+            from multihop_eval.ui.components.connection_panel import get_live_gateway
+
+            gateway = get_live_gateway() or ArangoGateway(cfg.arango)
             arango_rows = gateway.fetch_qa_rows(limit=1000)
         except Exception as exc:
             st.error(f"Could not fetch from ArangoDB: {exc}")

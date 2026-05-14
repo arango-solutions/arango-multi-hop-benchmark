@@ -37,6 +37,7 @@ from multihop_eval.generation.models import RunEvent, RunResult
 from multihop_eval.generation.pipeline import EvaluationOrchestrator
 from multihop_eval.generation.rubric_evaluator import RubricEvaluator
 from multihop_eval.generation.run_control import RunControl
+from multihop_eval.ui.components.connection_panel import is_connected
 from multihop_eval.ui.state import (
     KEY_RUN_EVENTS,
     KEY_RUN_RESULT,
@@ -115,8 +116,16 @@ def render_run_tab() -> None:
     status: str = st.session_state.get(KEY_RUN_STATUS, "idle")
     modal_open: bool = bool(st.session_state.get(KEY_SHOW_STOP_MODAL, False))
 
+    connection_warning = not is_connected()
+    if connection_warning and status in {"idle", "done", "stopped", "error"}:
+        st.warning(
+            "No live ArangoDB connection. Open the **Configure** tab and connect "
+            "(AMP or manual) before starting a run — the pipeline reads source "
+            "documents from your database."
+        )
+
     cols = st.columns([1, 1, 1, 3])
-    run_disabled = status in {"running", "paused", "stopping"}
+    run_disabled = status in {"running", "paused", "stopping"} or connection_warning
     stop_disabled = status not in {"running"} or handle is None
     reset_disabled = status in {"running", "paused", "stopping"}
 
