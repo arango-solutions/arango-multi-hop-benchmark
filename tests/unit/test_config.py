@@ -7,7 +7,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from multihop_eval.clients.amp import AmpEnv
 from multihop_eval.config import (
+    AUTH_MODE_JWT,
+    AUTH_MODE_PASSWORD,
     AppConfig,
     ArangoConfig,
     EvalConfig,
@@ -179,6 +182,85 @@ def test_langfuse_config_is_configured_when_enabled_with_creds(monkeypatch):
     cfg = LangFuseConfig()  # type: ignore[call-arg]
     assert cfg.enabled is True
     assert cfg.is_configured() is True
+
+
+def test_arango_config_password_mode_requires_password():
+    """Default auth_mode='password' rejects a missing or empty password."""
+    with pytest.raises(ValidationError):
+        ArangoConfig(host="https://x.example.com", db="d")  # type: ignore[call-arg]
+
+
+def test_arango_config_jwt_mode_does_not_require_password():
+    cfg = ArangoConfig(
+        host="https://x.example.com",
+        db="d",
+        auth_mode=AUTH_MODE_JWT,
+        jwt_token_path="/var/run/secrets/arango/token/token",
+    )  # type: ignore[call-arg]
+    assert cfg.auth_mode == AUTH_MODE_JWT
+    assert cfg.password is None
+    assert cfg.jwt_token_path == "/var/run/secrets/arango/token/token"
+
+
+def test_arango_config_jwt_mode_requires_token_path():
+    """auth_mode='jwt' without a token path is rejected at validation time."""
+    with pytest.raises(ValidationError):
+        ArangoConfig(
+            host="https://x.example.com",
+            db="d",
+            auth_mode=AUTH_MODE_JWT,
+        )  # type: ignore[call-arg]
+
+
+def test_arango_config_from_amp_builds_jwt_config(tmp_path):
+    token_file = tmp_path / "token"
+    token_file.write_text("jwt-value", encoding="utf-8")
+    amp = AmpEnv(
+        endpoint="https://deployment.svc:8529",
+        token_path=str(token_file),
+        ca_path=str(tmp_path / "ca.pem"),
+        deployment_name="my-deployment",
+    )
+    cfg = ArangoConfig.from_amp(
+        amp,
+        db="_system",
+        collections={"sources_collection": "custom_sources"},
+    )
+    assert cfg.auth_mode == AUTH_MODE_JWT
+    assert cfg.host == "https://deployment.svc:8529"
+    assert cfg.db == "_system"
+    assert cfg.jwt_token_path == str(token_file)
+    assert cfg.ca_cert_path == str(tmp_path / "ca.pem")
+    assert cfg.sources_collection == "custom_sources"
+    # Unspecified collections keep their defaults.
+    assert cfg.qa_collection == "qa_pairs_multihop_eval_v1"
+
+
+def test_arango_config_to_safe_dict_handles_jwt_mode(tmp_path):
+    token_file = tmp_path / "token"
+    token_file.write_text("jwt-value", encoding="utf-8")
+    cfg = AppConfig(
+        arango=ArangoConfig(
+            host="https://x.example.com",
+            db="d",
+            auth_mode=AUTH_MODE_JWT,
+            jwt_token_path=str(token_file),
+        ),  # type: ignore[call-arg]
+        llm=LLMConfig(api_key="sk"),  # type: ignore[arg-type]
+    )
+    safe = cfg.to_safe_dict()
+    # No password to redact, but the dict must still be serialisable.
+    assert safe["arango"]["password"] is None
+    assert safe["arango"]["auth_mode"] == AUTH_MODE_JWT
+
+
+def test_arango_config_default_auth_mode_is_password():
+    cfg = ArangoConfig(
+        host="https://x.example.com",
+        db="d",
+        password="pw",  # type: ignore[arg-type]
+    )
+    assert cfg.auth_mode == AUTH_MODE_PASSWORD
 
 
 def test_app_config_safe_dict_redacts_langfuse_secrets():
