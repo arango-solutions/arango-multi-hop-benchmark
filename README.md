@@ -146,10 +146,12 @@ docker run --rm -p 8000:8000 \
 
 ## UI walkthrough
 
-* **Configure** — fill in Arango connection, LLM provider, evaluation knobs;
-  edit the personas table; edit the rubric (add/remove fields, change scales
-  and weights). Save persists into the session; "Load from env" reads
-  `.env` / `./env`.
+* **Configure** — connect to ArangoDB (auto-detected AMP path or manual
+  host/db/user/password), pick the database from a live list, pick each
+  collection role from a selectbox with doc-count hints, multi-select
+  target cluster ids from the chosen domains collection, set LLM
+  provider + evaluation knobs, and edit the personas + rubric tables.
+  Save persists into the session; "Load from env" reads `.env` / `./env`.
 * **Run** — kicks off generation in a background thread; the live log streams
   events (cluster start, seed, accepted, rejected, pass done). Progress bar
   tracks `accepted/target` for the current cluster.
@@ -190,6 +192,33 @@ One JSON object per line, one line per (system, question):
 * The Arango sink uses the same shape, with `_key = "{system_name}__{qa_pair_key}"`
   so re-runs upsert instead of duplicating.
 
+## AMP auto-connect
+
+When the service is deployed inside the
+[Arango Managed Platform](https://arango.ai/blog/deploy-your-code-your-way-introducing-arango-byoc/)
+the kube-arangodb auth sidecar injects three pieces of context into the
+container:
+
+| Env var | Meaning |
+| --- | --- |
+| `ARANGO_DEPLOYMENT_ENDPOINT` (alias `ARANGODB_ENDPOINT`) | Internal HTTPS endpoint of the deployment, e.g. `https://deployment.default.svc:8529`. |
+| `ARANGO_TOKEN` | **Path** to a JWT file — rotated by the sidecar with a short TTL. The app reads the current value on every connection (and on `refresh_token()`), so rotation is invisible. |
+| `ARANGO_DEPLOYMENT_CA` *(optional)* | Path to the deployment's CA PEM for TLS verification. |
+| `ARANGO_DEPLOYMENT_NAME` *(optional)* | Deployment name — surfaced in the connection-status banner. |
+
+On start the Configure tab calls `detect_amp()`; when the contract above
+is satisfied (or `AMP=true` is set to force the path locally), the
+status pill flips to **Connected via AMP** and a database picker
+appears — populated by listing every database the JWT can read (default
+`_system`). Switching the database rebuilds the gateway with the same
+auth, then the collection selectboxes and the cluster-id multi-select
+all refresh from the live database.
+
+If the AMP env vars are not present (or the token file is not yet
+readable and `AMP` is not set), the panel falls back to the classic
+host / database / username / password form — exactly as the manual
+local-dev workflow has always worked.
+
 ## Configuration reference
 
 All env vars are optional in the UI (you can fill everything in via the
@@ -197,10 +226,14 @@ Configure tab) but required for non-interactive runs.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ARANGO_HOST` | — | https URL of the Arango cluster |
+| `ARANGO_HOST` | — | https URL of the Arango cluster (manual path) |
 | `ARANGO_DB` | — | database name |
 | `ARANGO_USERNAME` | `root` | |
-| `ARANGO_PASSWORD` | — | |
+| `ARANGO_PASSWORD` | — | password (only required when `auth_mode='password'`) |
+| `ARANGO_DEPLOYMENT_ENDPOINT` | — | AMP endpoint injected by the sidecar |
+| `ARANGO_TOKEN` | — | path to the rotating JWT file (AMP path) |
+| `ARANGO_DEPLOYMENT_CA` | — | optional CA PEM path for AMP TLS |
+| `AMP` | `false` | explicit override to force the AMP UI path |
 | `ARANGO_*_COLLECTION` | dataset defaults | override collection names |
 | `LLM_API_URL` | OpenAI v1 chat | any OpenAI-compatible endpoint |
 | `LLM_API_KEY` | — | |
