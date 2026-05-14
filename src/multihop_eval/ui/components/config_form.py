@@ -16,8 +16,8 @@ import streamlit as st
 from pydantic import ValidationError
 
 from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
-from multihop_eval.personas import DEFAULT_PERSONAS, Persona
-from multihop_eval.rubric import DEFAULT_RUBRIC, RubricField
+from multihop_eval.generation.personas import DEFAULT_PERSONAS, Persona
+from multihop_eval.generation.rubric import DEFAULT_RUBRIC, RubricField
 
 
 def _arango_form(prefill: ArangoConfig | None) -> dict[str, Any]:

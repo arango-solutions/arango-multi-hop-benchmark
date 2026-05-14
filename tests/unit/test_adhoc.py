@@ -1,11 +1,11 @@
-"""Tests for `multihop_eval.adhoc.AdhocEvaluator`."""
+"""Tests for `multihop_eval.generation.adhoc.AdhocEvaluator`."""
 
 from __future__ import annotations
 
 import pytest
 
-from multihop_eval.adhoc import AdhocEvaluator
-from multihop_eval.rubric import RubricField
+from multihop_eval.generation.adhoc import AdhocEvaluator
+from multihop_eval.generation.rubric import RubricField
 from tests.conftest import FakeLLMClient
 
 

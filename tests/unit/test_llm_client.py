@@ -1,4 +1,4 @@
-"""Tests for `multihop_eval.llm_client`."""
+"""Tests for `multihop_eval.clients.llm_client`."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from typing import Any
 
 import pytest
 
-from multihop_eval.config import LLMConfig
-from multihop_eval.llm_client import (
+from multihop_eval.clients.llm_client import (
     ContextLengthError,
     LLMClient,
     extract_json,
     strip_citations,
 )
+from multihop_eval.config import LLMConfig
 
 # ---------------------------------------------------------------------------
 # Tiny fake Response + Session for LLMClient

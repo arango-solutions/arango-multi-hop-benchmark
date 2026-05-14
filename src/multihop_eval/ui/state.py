@@ -18,8 +18,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from multihop_eval.config import AppConfig
-from multihop_eval.models import RunEvent, RunResult
-from multihop_eval.run_control import RunControl
+from multihop_eval.generation.models import RunEvent, RunResult
+from multihop_eval.generation.run_control import RunControl
 
 # Streamlit session-state keys — keep them in one place to avoid typos.
 KEY_APP_CONFIG = "app_config"

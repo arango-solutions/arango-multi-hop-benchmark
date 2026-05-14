@@ -30,13 +30,13 @@ import time
 
 import streamlit as st
 
-from multihop_eval.arango_gateway import ArangoGateway
+from multihop_eval.clients.arango_gateway import ArangoGateway
+from multihop_eval.clients.llm_client import LLMClient
 from multihop_eval.config import AppConfig
-from multihop_eval.llm_client import LLMClient
-from multihop_eval.models import RunEvent, RunResult
-from multihop_eval.pipeline import EvaluationOrchestrator
-from multihop_eval.rubric_evaluator import RubricEvaluator
-from multihop_eval.run_control import RunControl
+from multihop_eval.generation.models import RunEvent, RunResult
+from multihop_eval.generation.pipeline import EvaluationOrchestrator
+from multihop_eval.generation.rubric_evaluator import RubricEvaluator
+from multihop_eval.generation.run_control import RunControl
 from multihop_eval.ui.state import (
     KEY_RUN_EVENTS,
     KEY_RUN_RESULT,

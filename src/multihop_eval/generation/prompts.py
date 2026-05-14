@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from multihop_eval.personas import Persona
-from multihop_eval.rubric import RubricField
+from multihop_eval.generation.personas import Persona
+from multihop_eval.generation.rubric import RubricField
 
 # ============================================================
 # STEP 1 — GENERATION

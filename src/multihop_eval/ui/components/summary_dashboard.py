@@ -10,11 +10,11 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from multihop_eval.arango_gateway import ArangoGateway
+from multihop_eval.clients.arango_gateway import ArangoGateway
 from multihop_eval.exporters import export_to_excel, export_to_json
 from multihop_eval.exporters.json_exporter import export_run_to_json
-from multihop_eval.models import AcceptedQA, ProofPoint, RubricScore, RunResult
-from multihop_eval.summary import build_summary
+from multihop_eval.generation.models import AcceptedQA, ProofPoint, RubricScore, RunResult
+from multihop_eval.generation.summary import build_summary
 
 
 def _accepted_to_dataframe(rows: list[AcceptedQA]) -> pd.DataFrame:

@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 
 from multihop_eval.exporters import export_to_excel, export_to_json
 from multihop_eval.exporters.json_exporter import export_run_to_json
-from multihop_eval.models import (
+from multihop_eval.generation.models import (
     AcceptedQA,
     ProofPoint,
     RejectedQA,

@@ -1,11 +1,11 @@
-"""Tests for `multihop_eval.run_control.RunControl` — pause/stop semantics."""
+"""Tests for `multihop_eval.generation.run_control.RunControl` — pause/stop semantics."""
 
 from __future__ import annotations
 
 import threading
 import time
 
-from multihop_eval.run_control import RunControl
+from multihop_eval.generation.run_control import RunControl
 
 
 def test_default_state_is_running_and_not_stopped() -> None:

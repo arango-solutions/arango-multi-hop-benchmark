@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from statistics import mean
 from typing import Any
 
-from multihop_eval.models import AcceptedQA, RejectedQA, RunResult
+from multihop_eval.generation.models import AcceptedQA, RejectedQA, RunResult
 
 
 @dataclass

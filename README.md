@@ -39,25 +39,30 @@ through an optional LangFuse sink.
 
 ```text
 src/multihop_eval/
-├── config.py                 # Pydantic Settings: Arango, LLM, Eval, AppConfig
-├── personas.py               # Persona model + DEFAULT_PERSONAS
-├── rubric.py                 # RubricField model + DEFAULT_RUBRIC
-├── arango_gateway.py         # all ArangoDB I/O behind one class
-├── llm_client.py             # OpenAI-compatible chat client + retries
-├── prompts.py                # system prompts + builders (gen / multihop / verify / rubric)
-├── subgraph.py               # pure subgraph builders (no I/O)
-├── pipeline.py               # GenerationPipeline / ClusterProcessor / EvaluationOrchestrator
-├── rubric_evaluator.py       # judge-LLM-driven rubric scorer
-├── adhoc.py                  # AdhocEvaluator — validates user-supplied Q/A/proof
-├── summary.py                # build_summary(RunResult) → KPIs + distributions
-├── exporters/                # Excel + JSON writers (incl. rag_eval exporter)
-├── rag_eval/                 # RAG-system evaluation feature
+├── config.py                 # Pydantic Settings: Arango / LLM / Eval / RagEval / LangFuse → AppConfig
+├── logging_setup.py          # cross-cutting log configuration
+├── clients/                  # external integrations
+│   ├── arango_gateway.py     #   all ArangoDB I/O behind one class
+│   └── llm_client.py         #   OpenAI-compatible chat client + retries
+├── generation/               # the multi-hop QA generation feature
+│   ├── models.py             #   AcceptedQA / RejectedQA / RunResult / RunEvent / ProofPoint
+│   ├── personas.py           #   Persona model + DEFAULT_PERSONAS
+│   ├── rubric.py             #   RubricField model + DEFAULT_RUBRIC
+│   ├── prompts.py            #   system prompts + builders (gen / multihop / verify / rubric)
+│   ├── subgraph.py           #   pure subgraph builders (no I/O)
+│   ├── pipeline.py           #   GenerationPipeline / ClusterProcessor / EvaluationOrchestrator
+│   ├── rubric_evaluator.py   #   judge-LLM-driven rubric scorer
+│   ├── adhoc.py              #   AdhocEvaluator — validates user-supplied Q/A/proof
+│   ├── summary.py            #   build_summary(RunResult) -> KPIs + distributions
+│   └── run_control.py        #   cooperative pause/stop coordinator
+├── rag_eval/                 # the RAG-system evaluation feature
 │   ├── models.py             #   RagResponse / RagEvalRun / RagMetricBundle
-│   ├── qrels.py              #   golden proof_list → qrels (binary | graded)
+│   ├── qrels.py              #   golden proof_list -> qrels (binary | graded)
 │   ├── sources/              #   JSONL upload + Arango sink loaders
 │   ├── metrics/              #   retrieval.py + generation.py (no-LLM scorers)
 │   ├── pipeline.py           #   RagEvalOrchestrator (per-system aggregation)
 │   └── langfuse_sink.py      #   optional human-annotation sink
+├── exporters/                # Excel + JSON writers (generation + rag_eval)
 └── ui/                       # Streamlit app: Configure / Run / Dashboard / Ad-hoc / RAG Eval tabs
 ```
 

@@ -21,8 +21,8 @@ from typing import Any
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from multihop_eval.personas import DEFAULT_PERSONAS, Persona
-from multihop_eval.rubric import DEFAULT_RUBRIC, RubricField
+from multihop_eval.generation.personas import DEFAULT_PERSONAS, Persona
+from multihop_eval.generation.rubric import DEFAULT_RUBRIC, RubricField
 
 RAG_RESPONSE_SOURCE_JSONL = "jsonl"
 RAG_RESPONSE_SOURCE_ARANGO = "arango"

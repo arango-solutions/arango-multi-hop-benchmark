@@ -15,8 +15,8 @@ from multihop_eval.config import (
     LLMConfig,
     RagEvalConfig,
 )
-from multihop_eval.personas import DEFAULT_PERSONAS, Persona
-from multihop_eval.rubric import DEFAULT_RUBRIC, RubricField
+from multihop_eval.generation.personas import DEFAULT_PERSONAS, Persona
+from multihop_eval.generation.rubric import DEFAULT_RUBRIC, RubricField
 
 
 def test_arango_config_requires_scheme():

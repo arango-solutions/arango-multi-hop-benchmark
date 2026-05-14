@@ -6,14 +6,14 @@ import time
 from datetime import UTC, datetime
 
 from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
-from multihop_eval.models import (
+from multihop_eval.generation.models import (
     AcceptedQA,
     ProofPoint,
     RunEvent,
     RunResult,
 )
-from multihop_eval.personas import DEFAULT_PERSONAS
-from multihop_eval.rubric import DEFAULT_RUBRIC
+from multihop_eval.generation.personas import DEFAULT_PERSONAS
+from multihop_eval.generation.rubric import DEFAULT_RUBRIC
 from multihop_eval.ui.state import (
     event_to_log_line,
     progress_from_events,

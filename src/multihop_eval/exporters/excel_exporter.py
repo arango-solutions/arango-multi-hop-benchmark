@@ -10,7 +10,7 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from multihop_eval.models import AcceptedQA
+from multihop_eval.generation.models import AcceptedQA
 
 log = logging.getLogger(__name__)
 

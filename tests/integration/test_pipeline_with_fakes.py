@@ -15,12 +15,12 @@ We verify that:
 from __future__ import annotations
 
 from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
-from multihop_eval.models import RunEvent
-from multihop_eval.personas import DEFAULT_PERSONAS
-from multihop_eval.pipeline import EvaluationOrchestrator
-from multihop_eval.rubric import DEFAULT_RUBRIC
-from multihop_eval.rubric_evaluator import RubricEvaluator
-from multihop_eval.run_control import RunControl
+from multihop_eval.generation.models import RunEvent
+from multihop_eval.generation.personas import DEFAULT_PERSONAS
+from multihop_eval.generation.pipeline import EvaluationOrchestrator
+from multihop_eval.generation.rubric import DEFAULT_RUBRIC
+from multihop_eval.generation.rubric_evaluator import RubricEvaluator
+from multihop_eval.generation.run_control import RunControl
 from tests.conftest import FakeArangoGateway, FakeLLMClient
 
 

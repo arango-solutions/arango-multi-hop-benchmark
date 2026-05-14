@@ -29,7 +29,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from multihop_eval.arango_gateway import ArangoGateway
+from multihop_eval.clients.arango_gateway import ArangoGateway
 from multihop_eval.config import (
     RAG_RELEVANCE_BINARY,
     RAG_RELEVANCE_GRADED,

@@ -1,4 +1,4 @@
-"""Tests for `multihop_eval.subgraph`."""
+"""Tests for `multihop_eval.generation.subgraph`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from multihop_eval.subgraph import build_subgraph, pick_subgraph_size
+from multihop_eval.generation.subgraph import build_subgraph, pick_subgraph_size
 
 # ---------------------------------------------------------------------------
 # pick_subgraph_size

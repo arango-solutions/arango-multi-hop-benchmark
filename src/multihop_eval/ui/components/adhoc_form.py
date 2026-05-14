@@ -8,9 +8,9 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from multihop_eval.adhoc import AdhocEvaluator
+from multihop_eval.clients.llm_client import LLMClient
 from multihop_eval.config import AppConfig
-from multihop_eval.llm_client import LLMClient
+from multihop_eval.generation.adhoc import AdhocEvaluator
 
 
 def _editable_table(label: str, default_rows: list[dict], columns: dict) -> pd.DataFrame:

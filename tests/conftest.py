@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 
 from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
-from multihop_eval.personas import DEFAULT_PERSONAS
-from multihop_eval.rubric import DEFAULT_RUBRIC
+from multihop_eval.generation.personas import DEFAULT_PERSONAS
+from multihop_eval.generation.rubric import DEFAULT_RUBRIC
 
 # ---------------------------------------------------------------------------
 # FakeLLMClient — returns scripted responses in order.
@@ -56,7 +56,7 @@ class FakeLLMClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> str:
-        from multihop_eval.llm_client import ContextLengthError
+        from multihop_eval.clients.llm_client import ContextLengthError
 
         self.calls.append(
             {

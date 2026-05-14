@@ -1,4 +1,4 @@
-"""Tests for `multihop_eval.prompts`."""
+"""Tests for `multihop_eval.generation.prompts`."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from multihop_eval.personas import Persona
-from multihop_eval.prompts import (
+from multihop_eval.generation.personas import Persona
+from multihop_eval.generation.prompts import (
     SYSTEM_PROMPT_GEN,
     SYSTEM_PROMPT_MULTIHOP_CHECK,
     SYSTEM_PROMPT_RUBRIC,
@@ -17,7 +17,7 @@ from multihop_eval.prompts import (
     build_rubric_prompt,
     build_verify_prompt,
 )
-from multihop_eval.rubric import RubricField
+from multihop_eval.generation.rubric import RubricField
 
 
 def _persona() -> Persona:

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from multihop_eval.models import AcceptedQA, RunResult
+from multihop_eval.generation.models import AcceptedQA, RunResult
 
 
 def export_to_json(rows: list[AcceptedQA], output_path: str | Path) -> Path:

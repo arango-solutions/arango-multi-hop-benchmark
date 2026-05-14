@@ -1,4 +1,4 @@
-"""Tests for `multihop_eval.arango_gateway` using a fake `ArangoClient`.
+"""Tests for `multihop_eval.clients.arango_gateway` using a fake `ArangoClient`.
 
 We don't hit a real ArangoDB instance here — the goal is to verify that the
 gateway:
@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from multihop_eval.arango_gateway import ArangoGateway
+from multihop_eval.clients.arango_gateway import ArangoGateway
 from multihop_eval.config import ArangoConfig
 
 # ---------------------------------------------------------------------------

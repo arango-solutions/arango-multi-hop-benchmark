@@ -12,10 +12,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from multihop_eval.llm_client import LLMClient
-from multihop_eval.pipeline import GenerationPipeline, _build_content_blob
-from multihop_eval.rubric import RubricField
-from multihop_eval.rubric_evaluator import RubricEvaluator
+from multihop_eval.clients.llm_client import LLMClient
+from multihop_eval.generation.pipeline import GenerationPipeline, _build_content_blob
+from multihop_eval.generation.rubric import RubricField
+from multihop_eval.generation.rubric_evaluator import RubricEvaluator
 
 log = logging.getLogger(__name__)
 

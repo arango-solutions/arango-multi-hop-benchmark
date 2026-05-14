@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from multihop_eval.llm_client import LLMClient, extract_json
-from multihop_eval.models import RubricScore
-from multihop_eval.prompts import SYSTEM_PROMPT_RUBRIC, build_rubric_prompt
-from multihop_eval.rubric import RubricField
+from multihop_eval.clients.llm_client import LLMClient, extract_json
+from multihop_eval.generation.models import RubricScore
+from multihop_eval.generation.prompts import SYSTEM_PROMPT_RUBRIC, build_rubric_prompt
+from multihop_eval.generation.rubric import RubricField
 
 log = logging.getLogger(__name__)
 

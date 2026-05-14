@@ -19,14 +19,14 @@ from __future__ import annotations
 import sys
 from collections import Counter
 
-from multihop_eval.arango_gateway import ArangoGateway
+from multihop_eval.clients.arango_gateway import ArangoGateway
+from multihop_eval.clients.llm_client import LLMClient
 from multihop_eval.config import AppConfig
 from multihop_eval.exporters import export_to_excel
-from multihop_eval.llm_client import LLMClient
+from multihop_eval.generation.models import RunEvent
+from multihop_eval.generation.pipeline import EvaluationOrchestrator
+from multihop_eval.generation.rubric_evaluator import RubricEvaluator
 from multihop_eval.logging_setup import configure_logging
-from multihop_eval.models import RunEvent
-from multihop_eval.pipeline import EvaluationOrchestrator
-from multihop_eval.rubric_evaluator import RubricEvaluator
 
 
 def _print_event(ev: RunEvent) -> None:

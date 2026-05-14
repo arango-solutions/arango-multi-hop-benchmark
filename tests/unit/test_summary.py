@@ -1,4 +1,4 @@
-"""Tests for `multihop_eval.summary.build_summary`."""
+"""Tests for `multihop_eval.generation.summary.build_summary`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from multihop_eval.models import (
+from multihop_eval.generation.models import (
     AcceptedQA,
     ProofPoint,
     RejectedQA,
@@ -14,7 +14,7 @@ from multihop_eval.models import (
     RubricScore,
     RunResult,
 )
-from multihop_eval.summary import build_summary
+from multihop_eval.generation.summary import build_summary
 
 
 def _accepted(

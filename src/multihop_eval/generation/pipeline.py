@@ -24,9 +24,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from multihop_eval.clients.llm_client import (
+    ContextLengthError,
+    LLMClient,
+    extract_json,
+    strip_citations,
+)
 from multihop_eval.config import EvalConfig
-from multihop_eval.llm_client import ContextLengthError, LLMClient, extract_json, strip_citations
-from multihop_eval.models import (
+from multihop_eval.generation.models import (
     AcceptedQA,
     ProofPoint,
     RejectedQA,
@@ -34,8 +39,8 @@ from multihop_eval.models import (
     RunEvent,
     RunResult,
 )
-from multihop_eval.personas import Persona
-from multihop_eval.prompts import (
+from multihop_eval.generation.personas import Persona
+from multihop_eval.generation.prompts import (
     SYSTEM_PROMPT_GEN,
     SYSTEM_PROMPT_MULTIHOP_CHECK,
     SYSTEM_PROMPT_VERIFY,
@@ -43,9 +48,9 @@ from multihop_eval.prompts import (
     build_multihop_check_prompt,
     build_verify_prompt,
 )
-from multihop_eval.rubric_evaluator import RubricEvaluator
-from multihop_eval.run_control import RunControl
-from multihop_eval.subgraph import build_subgraph, pick_subgraph_size
+from multihop_eval.generation.rubric_evaluator import RubricEvaluator
+from multihop_eval.generation.run_control import RunControl
+from multihop_eval.generation.subgraph import build_subgraph, pick_subgraph_size
 
 log = logging.getLogger(__name__)
 
