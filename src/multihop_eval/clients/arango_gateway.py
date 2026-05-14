@@ -152,10 +152,7 @@ class ArangoGateway:
                 continue
             # python-arango returns `type=2` for document, `type=3` for edge.
             type_code = entry.get("type")
-            if type_code == 3 or entry.get("kind") == "edge":
-                kind = "edge"
-            else:
-                kind = "document"
+            kind = "edge" if type_code == 3 or entry.get("kind") == "edge" else "document"
             try:
                 count = int(self._db.collection(name).count())
             except Exception:  # pragma: no cover - permission/timeout guard

@@ -4,6 +4,10 @@ Every widget exposes a `help=` argument so Streamlit renders a small "ⓘ"
 icon next to its label; hovering pops a one-or-two-sentence description of
 what the parameter does. Help strings are kept inline with the widget so
 the explanation stays next to the field it documents.
+
+Connection details (host / username / password / AMP detection / database
+picker) live in the sibling `connection_panel` module — this file owns
+the *collection selection*, eval params, personas, and rubric only.
 """
 
 from __future__ import annotations
@@ -15,108 +19,246 @@ import pandas as pd
 import streamlit as st
 from pydantic import ValidationError
 
+from multihop_eval.clients.arango_gateway import ArangoGateway, CollectionInfo
 from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
 from multihop_eval.generation.personas import DEFAULT_PERSONAS, Persona
 from multihop_eval.generation.rubric import DEFAULT_RUBRIC, RubricField
+from multihop_eval.ui.components.connection_panel import (
+    get_live_collections,
+    refresh_cluster_ids,
+    refresh_collections,
+    render_connection_panel,
+)
+from multihop_eval.ui.state import (
+    KEY_ARANGO_CLUSTER_IDS,
+    KEY_ARANGO_COLLECTIONS,
+)
+
+# Map collection-role keys (matching ArangoConfig field names) → (label, help, default name).
+_COLLECTION_ROLES: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "sources_collection",
+        "Sources collection",
+        (
+            "Collection containing the raw source documents. Each document must "
+            "expose `content` and `filename` fields."
+        ),
+        "multihop_eval_sources",
+    ),
+    (
+        "similarity_collection",
+        "Similarity collection",
+        (
+            "Edge collection of document-to-document similarities. Each edge has "
+            "`_from`, `_to` (source `_id`s) and `similarity_score`. Used to traverse "
+            "between related documents when building a subgraph."
+        ),
+        "multihop_eval_similarities",
+    ),
+    (
+        "relations_collection",
+        "Relations collection",
+        (
+            "Edge collection that maps each source document to its cluster: "
+            "`_from` = source `_id`, `_to` = cluster (domain) `_id`."
+        ),
+        "multihop_eval_corpus_relations",
+    ),
+    (
+        "domains_collection",
+        "Domains collection",
+        (
+            "Collection whose `_id`s are referenced as cluster ids by the relations "
+            "edges (e.g. `domains/cluster_0`). Cluster picker draws its options from here."
+        ),
+        "multihop_eval_domains",
+    ),
+    (
+        "rags_collection",
+        "RAGs collection",
+        (
+            "Collection mapping clusters to a `rag_partition_id`. The partition id "
+            "is tagged onto every generated QA pair so downstream RAG benchmarks can "
+            "filter by partition."
+        ),
+        "multihop_eval_rags",
+    ),
+    (
+        "qa_collection",
+        "QA collection (output)",
+        (
+            "Collection that accepted QA pairs are written to. Created automatically "
+            "on first run if it doesn't exist. Pick an existing collection to append, "
+            "or type a fresh name to create a new one."
+        ),
+        "qa_pairs_multihop_eval_v1",
+    ),
+)
 
 
-def _arango_form(prefill: ArangoConfig | None) -> dict[str, Any]:
-    cols = st.columns(2)
-    host = cols[0].text_input(
-        "Host",
-        value=(prefill.host if prefill else "https://"),
-        help=(
-            "Base URL of your ArangoDB cluster, including scheme. "
-            "Example: `https://my-cluster.arangodb.cloud`."
-        ),
+def _collection_label(info: CollectionInfo) -> str:
+    """Format a collection name + doc count for display in a selectbox."""
+    return f"{info.name}  ({info.doc_count:,} docs, {info.kind})"
+
+
+def _suggest_default(
+    role_key: str,
+    *,
+    prefill_name: str | None,
+    fallback_default: str,
+    available: list[CollectionInfo],
+) -> str | None:
+    """Pick a sensible pre-selection for a collection selectbox.
+
+    Order of preference:
+
+    1. The previously-saved value (`prefill_name`) if it exists in the DB.
+    2. The hard-coded default name (e.g. `multihop_eval_sources`) if present.
+    3. Any collection whose name *contains* a keyword derived from the role
+       (e.g. `sources_collection` → looks for "sources").
+    4. `None` (let the user pick).
+    """
+    if not available:
+        return None
+    names = {c.name for c in available}
+    if prefill_name and prefill_name in names:
+        return prefill_name
+    if fallback_default in names:
+        return fallback_default
+    keyword = role_key.removesuffix("_collection")
+    for c in available:
+        if keyword and keyword in c.name:
+            return c.name
+    return None
+
+
+def _render_collection_selectboxes(
+    gateway: ArangoGateway,
+    prefill: ArangoConfig | None,
+) -> dict[str, str]:
+    """Render the six collection-role selectboxes when a gateway is live."""
+    if st.session_state.get(KEY_ARANGO_COLLECTIONS) is None:
+        refresh_collections(gateway)
+    available = get_live_collections()
+
+    cols = st.columns([1, 1, 4])
+    if cols[0].button(
+        "Refresh collections",
+        help="Re-list collections from the connected database.",
+    ):
+        refresh_collections(gateway)
+        available = get_live_collections()
+        st.rerun()
+    if not available:
+        cols[1].caption("(no collections returned)")
+    else:
+        cols[1].caption(f"{len(available)} collection(s) discovered")
+
+    chosen: dict[str, str] = {}
+    grid = st.columns(2)
+    for idx, (role_key, label, helptext, default) in enumerate(_COLLECTION_ROLES):
+        col = grid[idx % 2]
+        prefill_name = getattr(prefill, role_key, None) if prefill else None
+        names = [c.name for c in available]
+        options = list(names)
+        # qa_collection is an output — allow typing a brand-new name as well.
+        custom_option = "<other / new collection…>"
+        if role_key == "qa_collection":
+            options = [*names, custom_option]
+        default_value = _suggest_default(
+            role_key,
+            prefill_name=prefill_name,
+            fallback_default=default,
+            available=available,
+        )
+        if default_value is None:
+            # No match: for qa_collection default to "create new"; for inputs
+            # leave at index 0 so something is always selected.
+            if role_key == "qa_collection":
+                default_value = custom_option
+            elif options:
+                default_value = options[0]
+        format_fn = (
+            (lambda name: name)
+            if role_key == "qa_collection"
+            else (
+                lambda name, _by={c.name: c for c in available}: (
+                    _collection_label(_by[name]) if name in _by else name
+                )
+            )
+        )
+        if not options:
+            chosen_name = col.text_input(
+                label,
+                value=prefill_name or default,
+                help=helptext + " (No collections discovered; type a name.)",
+            )
+        else:
+            index = options.index(default_value) if default_value in options else 0
+            chosen_name = col.selectbox(
+                label,
+                options=options,
+                index=index,
+                format_func=format_fn,
+                help=helptext,
+                key=f"coll_pick_{role_key}",
+            )
+            if role_key == "qa_collection" and chosen_name == custom_option:
+                chosen_name = col.text_input(
+                    f"{label} — new name",
+                    value=prefill_name or default,
+                    help=(
+                        "Type a fresh collection name; it will be created the first "
+                        "time the pipeline writes to it."
+                    ),
+                    key=f"coll_pick_{role_key}_new",
+                )
+        chosen[role_key] = chosen_name
+
+        # Doc-count hint: warn when an *input* collection looks empty.
+        if role_key != "qa_collection":
+            picked = next((c for c in available if c.name == chosen_name), None)
+            if picked is not None and picked.doc_count == 0:
+                col.warning(
+                    f"`{chosen_name}` is empty — is this the right collection for "
+                    f"**{label}**?"
+                )
+
+    return chosen
+
+
+def _render_collection_text_inputs(prefill: ArangoConfig | None) -> dict[str, str]:
+    """Render the legacy text inputs used when no gateway is live."""
+    chosen: dict[str, str] = {}
+    grid = st.columns(2)
+    for idx, (role_key, label, helptext, default) in enumerate(_COLLECTION_ROLES):
+        col = grid[idx % 2]
+        prefill_value = getattr(prefill, role_key, None) if prefill else None
+        chosen[role_key] = col.text_input(
+            label,
+            value=prefill_value or default,
+            help=helptext,
+            key=f"coll_text_{role_key}",
+        )
+    return chosen
+
+
+def _collections_section(
+    gateway: ArangoGateway | None,
+    prefill: ArangoConfig | None,
+) -> dict[str, str]:
+    st.subheader("Collections")
+    if gateway is None:
+        st.caption(
+            "Not connected — collection names are typed manually. Connect above to "
+            "pick from a live list with doc-count hints."
+        )
+        return _render_collection_text_inputs(prefill)
+    st.caption(
+        "Pick which collection plays which role in the pipeline. Doc counts come "
+        "from the live database; refresh if you just created or wrote to a collection."
     )
-    db = cols[1].text_input(
-        "Database",
-        value=(prefill.db if prefill else ""),
-        help=(
-            "Name of the database holding the corpus collections (sources, "
-            "similarities, etc.). The QA output collection will be created in "
-            "this same database if it doesn't already exist."
-        ),
-    )
-    cols = st.columns(2)
-    username = cols[0].text_input(
-        "Username",
-        value=(prefill.username if prefill else "root"),
-        help="ArangoDB user with read access to the corpus and write access to the QA collection.",
-    )
-    password = cols[1].text_input(
-        "Password",
-        value=(prefill.password.get_secret_value() if prefill else ""),
-        type="password",
-        help="ArangoDB user password. Kept in session memory only; never written to disk.",
-    )
-    with st.expander("Collection names (override only if your dataset differs)", expanded=False):
-        cols = st.columns(2)
-        sim = cols[0].text_input(
-            "Similarity collection",
-            value=(prefill.similarity_collection if prefill else "multihop_eval_similarities"),
-            help=(
-                "Edge collection of document-to-document similarities. Each edge has "
-                "`_from`, `_to` (source `_id`s) and `similarity_score`. Used to traverse "
-                "between related documents when building a subgraph."
-            ),
-        )
-        rel = cols[1].text_input(
-            "Relations collection",
-            value=(prefill.relations_collection if prefill else "multihop_eval_corpus_relations"),
-            help=(
-                "Edge collection that maps each source document to its cluster: "
-                "`_from` = source `_id`, `_to` = cluster (domain) `_id`."
-            ),
-        )
-        cols = st.columns(2)
-        rags = cols[0].text_input(
-            "RAGs collection",
-            value=(prefill.rags_collection if prefill else "multihop_eval_rags"),
-            help=(
-                "Collection mapping clusters to a `rag_partition_id`. The partition id "
-                "is tagged onto every generated QA pair so downstream RAG benchmarks can "
-                "filter by partition."
-            ),
-        )
-        sources = cols[1].text_input(
-            "Sources collection",
-            value=(prefill.sources_collection if prefill else "multihop_eval_sources"),
-            help=(
-                "Collection containing the raw source documents. Each document must "
-                "expose `content` and `filename` fields."
-            ),
-        )
-        cols = st.columns(2)
-        domains = cols[0].text_input(
-            "Domains collection",
-            value=(prefill.domains_collection if prefill else "multihop_eval_domains"),
-            help=(
-                "Collection whose `_id`s are referenced as cluster ids by the relations "
-                "edges (e.g. `domains/cluster_0`)."
-            ),
-        )
-        qa = cols[1].text_input(
-            "QA collection (output)",
-            value=(prefill.qa_collection if prefill else "qa_pairs_multihop_eval_v1"),
-            help=(
-                "Collection that accepted QA pairs are written to. Created automatically "
-                "on first run if it doesn't exist."
-            ),
-        )
-    return {
-        "host": host,
-        "db": db,
-        "username": username,
-        "password": password,
-        "similarity_collection": sim,
-        "relations_collection": rel,
-        "rags_collection": rags,
-        "sources_collection": sources,
-        "domains_collection": domains,
-        "qa_collection": qa,
-    }
+    return _render_collection_selectboxes(gateway, prefill)
 
 
 def _llm_form(prefill: LLMConfig | None) -> dict[str, Any]:
@@ -195,18 +337,78 @@ def _llm_form(prefill: LLMConfig | None) -> dict[str, Any]:
     }
 
 
-def _eval_form(prefill: EvalConfig | None) -> dict[str, Any]:
+def _target_clusters_widget(
+    *,
+    gateway: ArangoGateway | None,
+    domains_collection: str | None,
+    prefill_clusters: list[str],
+) -> list[str]:
+    """Multiselect when a gateway+domains collection are available, textarea otherwise."""
+    if gateway is None or not domains_collection:
+        clusters_str = st.text_area(
+            "Target clusters (one per line)",
+            value="\n".join(prefill_clusters),
+            height=110,
+            help=(
+                "One cluster id per line. The generator processes each cluster in order, "
+                "aiming to produce `Questions per cluster` accepted QA pairs from it. "
+                "Cluster ids without a `/` are auto-prefixed with the domains collection."
+            ),
+        )
+        return [c.strip() for c in clusters_str.splitlines() if c.strip()]
+
+    cached = st.session_state.get(KEY_ARANGO_CLUSTER_IDS)
+    if cached is None:
+        cached = refresh_cluster_ids(gateway, domains_collection)
+    cols = st.columns([3, 1])
+    options = sorted({*cached, *prefill_clusters})
+    if not options:
+        cols[0].info(
+            f"No cluster ids found in `{domains_collection}` yet. Type them manually "
+            "below, or refresh after ingest finishes."
+        )
+        clusters_str = cols[0].text_area(
+            "Target clusters (one per line)",
+            value="\n".join(prefill_clusters),
+            height=110,
+            help="One cluster id per line.",
+        )
+        chosen = [c.strip() for c in clusters_str.splitlines() if c.strip()]
+    else:
+        default = [c for c in prefill_clusters if c in options] or options[:1]
+        chosen = cols[0].multiselect(
+            "Target clusters",
+            options=options,
+            default=default,
+            help=(
+                f"Pick the cluster ids to evaluate against. Drawn from "
+                f"`{domains_collection}._key` in the connected database."
+            ),
+            key="target_clusters_picker",
+        )
+    if cols[1].button(
+        "Refresh clusters",
+        help=f"Re-list cluster ids from `{domains_collection}`.",
+    ):
+        refresh_cluster_ids(gateway, domains_collection)
+        st.rerun()
+    return chosen
+
+
+def _eval_form(
+    prefill: EvalConfig | None,
+    *,
+    gateway: ArangoGateway | None,
+    domains_collection: str | None,
+) -> dict[str, Any]:
     cols = st.columns(2)
-    clusters_str = cols[0].text_area(
-        "Target clusters (one per line)",
-        value="\n".join(prefill.target_clusters if prefill else ["cluster_0"]),
-        height=110,
-        help=(
-            "One cluster id per line. The generator processes each cluster in order, "
-            "aiming to produce `Questions per cluster` accepted QA pairs from it. "
-            "Cluster ids without a `/` are auto-prefixed with the domains collection."
-        ),
-    )
+    prefill_clusters = list(prefill.target_clusters) if prefill else ["cluster_0"]
+    with cols[0]:
+        target_clusters = _target_clusters_widget(
+            gateway=gateway,
+            domains_collection=domains_collection,
+            prefill_clusters=prefill_clusters,
+        )
     n_questions = cols[1].number_input(
         "Questions per cluster",
         min_value=1,
@@ -249,12 +451,12 @@ def _eval_form(prefill: EvalConfig | None) -> dict[str, Any]:
 
     st.markdown("**Hop distribution**")
     hop_dist_str = st.text_input(
-        "Hop sizes (comma-separated, all ≥ 2)",
+        "Hop sizes (comma-separated, all >= 2)",
         value=",".join(str(h) for h in (prefill.hop_dist if prefill else [2, 3])),
         help=(
             "How many documents a question should require to answer. `2,3` means most "
             "generated questions will need 2 or 3 documents combined. Values must be "
-            "integers ≥ 2 (a 1-hop is a single-doc question, which isn't multi-hop)."
+            "integers >= 2 (a 1-hop is a single-doc question, which isn't multi-hop)."
         ),
     )
     hop_weights_str = st.text_input(
@@ -268,7 +470,7 @@ def _eval_form(prefill: EvalConfig | None) -> dict[str, Any]:
     )
 
     return {
-        "target_clusters": [c.strip() for c in clusters_str.splitlines() if c.strip()],
+        "target_clusters": target_clusters,
         "n_questions": int(n_questions),
         "hop_dist": [int(x) for x in hop_dist_str.split(",") if x.strip()],
         "hop_dist_weights": [float(x) for x in hop_weights_str.split(",") if x.strip()],
@@ -409,6 +611,35 @@ def _rubric_editor(prefill: list[RubricField]) -> list[RubricField]:
     return out
 
 
+def _arango_config_from(
+    gateway: ArangoGateway | None,
+    *,
+    collection_overrides: dict[str, str],
+    fallback_prefill: ArangoConfig | None,
+) -> ArangoConfig:
+    """Build a fresh `ArangoConfig` carrying the live auth + the chosen collections.
+
+    Connected case: clone `gateway.config` and overlay the chosen
+    collection names. Disconnected case: fall back to `fallback_prefill`
+    (or class defaults) so the user can still save.
+    """
+    if gateway is not None:
+        base = gateway.config.model_dump()
+        # `password` is a SecretStr in the live config; .model_dump() emits the
+        # secret as `SecretStr('***')` which round-trips just fine.
+        if gateway.config.password is not None:
+            base["password"] = gateway.config.password.get_secret_value()
+        base.update(collection_overrides)
+        return ArangoConfig(**base)  # type: ignore[arg-type]
+    if fallback_prefill is not None:
+        base = fallback_prefill.model_dump()
+        if fallback_prefill.password is not None:
+            base["password"] = fallback_prefill.password.get_secret_value()
+        base.update(collection_overrides)
+        return ArangoConfig(**base)  # type: ignore[arg-type]
+    return ArangoConfig(**collection_overrides)  # type: ignore[arg-type]
+
+
 def render_config_form() -> AppConfig | None:
     """Render the full config form. Returns the assembled `AppConfig` once
     the user clicks Save (and validation succeeds), else `None`.
@@ -424,12 +655,19 @@ def render_config_form() -> AppConfig | None:
         existing.eval.rubric_fields if existing else list(DEFAULT_RUBRIC)
     )
 
-    with st.expander("ArangoDB connection", expanded=existing is None):
-        arango_data = _arango_form(arango_prefill)
+    st.subheader("ArangoDB connection")
+    gateway = render_connection_panel(prefill=arango_prefill)
+
+    collection_overrides = _collections_section(gateway, arango_prefill)
+
     with st.expander("LLM provider", expanded=existing is None):
         llm_data = _llm_form(llm_prefill)
     with st.expander("Evaluation parameters", expanded=existing is None):
-        eval_data = _eval_form(eval_prefill)
+        eval_data = _eval_form(
+            eval_prefill,
+            gateway=gateway,
+            domains_collection=collection_overrides.get("domains_collection"),
+        )
 
     st.subheader("Personas")
     personas = _persona_editor(personas_prefill)
@@ -469,8 +707,13 @@ def render_config_form() -> AppConfig | None:
         return existing
 
     try:
+        arango_cfg = _arango_config_from(
+            gateway,
+            collection_overrides=collection_overrides,
+            fallback_prefill=arango_prefill,
+        )
         cfg = AppConfig(
-            arango=ArangoConfig(**arango_data),  # type: ignore[arg-type]
+            arango=arango_cfg,
             llm=LLMConfig(**llm_data),  # type: ignore[arg-type]
             eval=EvalConfig(
                 **eval_data,
