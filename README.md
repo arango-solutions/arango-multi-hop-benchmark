@@ -3,7 +3,15 @@
 Multi-hop QA dataset generation, validation, and rubric-based evaluation
 against an ArangoDB graph corpus, packaged as an
 [Arango BYOC](https://arango.ai/blog/deploy-your-code-your-way-introducing-arango-byoc/)
-Streamlit service.
+service: a React/Vite single-page app served by a FastAPI backend on a single
+port.
+
+> **UI migration in progress.** The UI is being moved from Streamlit to a
+> React/Vite SPA + FastAPI API (`src/multihop_eval/web/` + `ui/`). The
+> **Configure** and **Run** tabs are live in React today; **Dashboard**,
+> **Ad-hoc**, and **RAG Eval** render as "coming soon" placeholders and are
+> being ported incrementally. The underlying generation / rag-eval / exporter
+> modules are unchanged.
 
 ## What it does
 
@@ -63,23 +71,43 @@ src/multihop_eval/
 │   ├── pipeline.py           #   RagEvalOrchestrator (per-system aggregation)
 │   └── langfuse_sink.py      #   optional human-annotation sink
 ├── exporters/                # Excel + JSON writers (generation + rag_eval)
-└── ui/                       # Streamlit app: Configure / Run / Dashboard / Ad-hoc / RAG Eval tabs
+└── web/                      # FastAPI: SPA static serving + JSON API
+    ├── service.py            #   app, /health, SPA mounts (/ui, /frontend, /assets)
+    ├── sessions.py           #   per-client session registry (X-Arango-Session)
+    ├── run_manager.py        #   background run thread + queue + SSE generator
+    ├── schemas.py            #   request/response models
+    └── routers/              #   connection / config / run endpoints
+
+ui/                           # React + TypeScript + Vite SPA (built into ui/dist)
+├── src/api/                  #   typed client (apiBase prefix-strip + X-Arango-Session)
+└── src/components/           #   ConnectionPanel / ConfigureTab / RunTab + placeholders
 ```
 
 ## Quick start (local)
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) and Python 3.13.
+Prerequisites: [uv](https://docs.astral.sh/uv/), Python 3.13, and Node.js 18+.
 
 ```bash
 cp .env.example .env
 # Fill in ARANGO_HOST, ARANGO_DB, ARANGO_PASSWORD, LLM_API_KEY at minimum.
 
 ./scripts/run_local.sh
-# → Streamlit UI at http://0.0.0.0:8000/
+# Builds the React SPA into ui/dist (first run) then serves on 0.0.0.0:8000.
+# → UI at http://0.0.0.0:8000/ui
 ```
 
 The same `main.py` that drives `run_local.sh` is the BYOC entrypoint, so what
 you see locally is exactly what runs in the container.
+
+### Frontend hot-reload (two terminals)
+
+```bash
+# Terminal 1 — FastAPI backend with autoreload
+uv run uvicorn multihop_eval.web.service:app --reload --port 8000
+
+# Terminal 2 — Vite dev server (proxies /connection, /config, /run to :8000)
+cd ui && npm install && npm run dev   # → http://localhost:5173
+```
 
 ## Running tests
 
@@ -94,10 +122,17 @@ uv run ruff check .    # lint
 This project is laid out so [ServiceMaker](https://github.com/arangodb/servicemaker)
 can package it without modification. Per the Arango BYOC contract:
 
-* The Streamlit service binds to `0.0.0.0:8000` and serves at the root path
-  (`baseUrlPath=""`) — see [main.py](main.py).
-* All dependencies live in `[project.dependencies]` of
-  [pyproject.toml](pyproject.toml) (no `uv sync --extra` extras at runtime 
+* The FastAPI service (React SPA + JSON API) binds to `0.0.0.0:8000` and serves
+  at the root path — see [main.py](main.py). The platform proxy prefix
+  (`/_service/uds/_global/<name>/`) is handled in the browser (Vite
+  `base: "./"` + the client's `apiBase()`), so the container always sees clean
+  root paths.
+* The SPA must be built into `ui/dist` before packaging. The
+  [Dockerfile](Dockerfile) does this in a Node build stage; for ServiceMaker or
+  a manual tarball, run `cd ui && npm ci && npm run build` first so `ui/dist`
+  ships in the artifact.
+* All Python dependencies live in `[project.dependencies]` of
+  [pyproject.toml](pyproject.toml) (no `uv sync --extra` extras at runtime).
 * Python 3.13 is required (`.python-version` and `pyproject.toml` agree).
 
 ### ServiceMaker workflow
@@ -109,6 +144,9 @@ cd servicemaker
 cargo build --release
 
 # From the multi-hop-eval workspace root:
+# Build the SPA first so ui/dist is included in the artifact:
+(cd ui && npm ci && npm run build)
+
 /path/to/servicemaker/target/release/servicemaker \
   --name multihop-eval \
   --project-home . \
