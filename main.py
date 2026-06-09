@@ -4,43 +4,32 @@ Per the Arango BYOC contract (see `.cursor/skills/package-for-arango-byoc-skill.
   * The container must expose an HTTP server on port **8000**.
   * The application must handle requests at the root path (`/`).
 
-Streamlit is launched directly on `0.0.0.0:8000` with `baseUrlPath=""` so the
-container manager can route requests at `/` straight to the UI without a
-reverse proxy.
+A single FastAPI process (``multihop_eval.web.service:app``) serves both the
+React/Vite SPA (built into ``ui/dist``) and the JSON API on ``0.0.0.0:8000``.
+``proxy_headers`` + ``forwarded_allow_ips`` let it sit behind the Arango edge
+router without losing the original scheme/host.
 """
 
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
-from streamlit.web import cli as stcli
+import uvicorn
 
 
-def _resolve_streamlit_app() -> str:
-    here = Path(__file__).resolve().parent
-    return str(here / "src" / "multihop_eval" / "ui" / "streamlit_app.py")
-
-
-def main() -> int:
+def main() -> None:
     port = int(os.getenv("PORT", "8000"))
-    address = os.getenv("HOST", "0.0.0.0")  # noqa: S104 — BYOC requires binding to all interfaces
-    base_path = os.getenv("STREAMLIT_BASE_PATH", "")
+    host = os.getenv("HOST", "0.0.0.0")  # noqa: S104 — BYOC requires binding to all interfaces
 
-    sys.argv = [
-        "streamlit",
-        "run",
-        _resolve_streamlit_app(),
-        f"--server.port={port}",
-        f"--server.address={address}",
-        f"--server.baseUrlPath={base_path}",
-        "--server.headless=true",
-        "--server.fileWatcherType=none",
-        "--browser.gatherUsageStats=false",
-    ]
-    return stcli.main()
+    uvicorn.run(
+        "multihop_eval.web.service:app",
+        host=host,
+        port=port,
+        reload=False,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

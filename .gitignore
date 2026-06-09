@@ -13,4 +13,5 @@ build/
 *.xlsx
 !eval_*example*.xlsx
 .DS_Store
-.streamlit/secrets.toml
+node_modules/
+servicemaker-*
