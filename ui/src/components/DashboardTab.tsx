@@ -142,7 +142,7 @@ export function DashboardTab({ connected }: Props) {
             onChange={(e) => setSource(e.target.value as DashboardSource)}
           >
             <option value="session">Current session run</option>
-            <option value="arango">Persisted (ArangoDB)</option>
+            <option value="arango">Persisted (Arango)</option>  
           </select>
         </div>
         <button onClick={() => load(source)} disabled={busy}>
@@ -163,7 +163,7 @@ export function DashboardTab({ connected }: Props) {
 
       {source === "arango" && !connected && (
         <div className="banner warn">
-          Persisted data is read live from ArangoDB. Connect on the Configure tab first.
+          Persisted data is read live from Arango. Connect on the Configure tab first.
         </div>
       )}
 

@@ -388,7 +388,7 @@ export function ConfigureTab({
                   setEvalParams({ ...evalParams, save_to_arango: e.target.checked })
                 }
               />
-              Save accepted rows to ArangoDB
+              Save accepted rows to Arango
             </label>
             <label className="field checkbox">
               <input

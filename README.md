@@ -1,7 +1,7 @@
 # multi-hop-eval
 
 Multi-hop QA dataset generation, validation, and rubric-based evaluation
-against an ArangoDB graph corpus, packaged as an
+against an Arango graph corpus, packaged as an
 [Arango BYOC](https://arango.ai/blog/deploy-your-code-your-way-introducing-arango-byoc/)
 service: a React/Vite single-page app served by a FastAPI backend on a single
 port.
@@ -15,7 +15,7 @@ port.
 
 ## What it does
 
-Given clusters of related documents in ArangoDB, the service:
+Given clusters of related documents in Arango, the service:
 
 1. **Generates** multi-hop QA pairs whose answers require combining evidence
    from multiple documents (so they can't be answered by vector RAG over a
@@ -25,7 +25,7 @@ Given clusters of related documents in ArangoDB, the service:
 3. **Scores** every accepted QA pair against a **user-defined rubric**
    (factuality, faithfulness, conciseness, multi-hop genuineness, persona-fit
    by default — fully editable from the UI).
-4. **Persists** to an ArangoDB collection and exports Excel / JSON.
+4. **Persists** to an Arango collection and exports Excel / JSON.
 5. **Visualises** results in a Streamlit dashboard with KPIs, charts, and a
    filterable QA table.
 
@@ -184,7 +184,7 @@ docker run --rm -p 8000:8000 \
 
 ## UI walkthrough
 
-* **Configure** — connect to ArangoDB (auto-detected AMP path or manual
+* **Configure** — connect to Arango (auto-detected AMP path or manual
   host/db/user/password), pick the database from a live list, pick each
   collection role from a selectbox with doc-count hints, multi-select
   target cluster ids from the chosen domains collection, set LLM
@@ -194,7 +194,7 @@ docker run --rm -p 8000:8000 \
   events (cluster start, seed, accepted, rejected, pass done). Progress bar
   tracks `accepted/target` for the current cluster.
 * **Dashboard** — switch between "this session's run" and the persisted
-  ArangoDB collection. KPIs (total, accept rate, avg hops, weighted rubric),
+  Arango collection. KPIs (total, accept rate, avg hops, weighted rubric),
   distribution charts, filterable table, Excel/JSON downloads.
 * **Ad-hoc** — paste a Q/A/proof + source docs, run multi-hop and proof
   verification only. Optionally also score with the configured rubric.

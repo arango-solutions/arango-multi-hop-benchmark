@@ -149,7 +149,7 @@ export function RagEvalTab({ connected }: Props) {
 
         {!connected && (
           <div className="banner warn">
-            Goldens are read from ArangoDB. Connect on the Configure tab first.
+            Goldens are read from Arango. Connect on the Configure tab first.
           </div>
         )}
 
@@ -182,7 +182,7 @@ export function RagEvalTab({ connected }: Props) {
               onChange={(e) => setResponseSource(e.target.value as RagResponseSource)}
             >
               <option value="jsonl">JSONL upload</option>
-              <option value="arango">ArangoDB collection</option>
+              <option value="arango">Arango collection</option>
             </select>
           </div>
         </div>

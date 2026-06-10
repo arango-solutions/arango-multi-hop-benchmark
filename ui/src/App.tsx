@@ -47,7 +47,7 @@ export function App() {
       <header className="app-header">
         <h1>Multi-Hop Eval</h1>
         <span className="subtitle">
-          QA dataset generation & evaluation against ArangoDB graph data
+          QA dataset generation & evaluation against Arango graph data
         </span>
       </header>
 
