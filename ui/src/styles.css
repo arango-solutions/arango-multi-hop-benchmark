@@ -356,4 +356,44 @@
     border: 1px solid color-mix(in srgb, var(--danger) 68%, var(--border));
     color: var(--danger);
   }
+
+  .howto-lead {
+    @apply mb-5 text-sm leading-relaxed;
+    color: var(--muted);
+  }
+
+  .howto-section {
+    @apply mb-6 last:mb-0;
+  }
+
+  .howto-section > p {
+    @apply m-0 text-sm leading-relaxed;
+    color: var(--text);
+  }
+
+  .howto-steps,
+  .howto-list {
+    @apply m-0 space-y-2 pl-5 text-sm leading-relaxed;
+    color: var(--text);
+  }
+
+  .howto-steps {
+    @apply list-decimal;
+  }
+
+  .howto-list {
+    @apply list-disc;
+  }
+
+  .howto code {
+    @apply rounded px-1 py-0.5 font-mono text-xs;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+
+  .howto-code {
+    @apply mt-3 overflow-x-auto rounded-xl p-3 font-mono text-xs leading-relaxed;
+    background: color-mix(in srgb, var(--panel-2) 70%, #000000);
+    border: 1px solid var(--border);
+  }
 }
