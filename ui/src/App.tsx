@@ -3,7 +3,9 @@ import { api } from "./api/client";
 import type { ConfigResponse, ConnectionStatus } from "./api/types";
 import { ConfigureTab } from "./components/ConfigureTab";
 import { RunTab } from "./components/RunTab";
-import { Placeholder } from "./components/Placeholder";
+import { DashboardTab } from "./components/DashboardTab";
+import { AdhocTab } from "./components/AdhocTab";
+import { RagEvalTab } from "./components/RagEvalTab";
 
 type TabId = "configure" | "run" | "dashboard" | "adhoc" | "rag_eval";
 
@@ -75,24 +77,9 @@ export function App() {
       {activeTab === "run" && (
         <RunTab connected={connected} hasConfig={hasConfig} />
       )}
-      {activeTab === "dashboard" && (
-        <Placeholder
-          title="Dashboard"
-          detail="Charts, KPI cards, and Excel/JSON export are coming in a follow-up slice."
-        />
-      )}
-      {activeTab === "adhoc" && (
-        <Placeholder
-          title="Ad-hoc"
-          detail="Single QA-pair validation is coming in a follow-up slice."
-        />
-      )}
-      {activeTab === "rag_eval" && (
-        <Placeholder
-          title="RAG Eval"
-          detail="Retrieval + generation metrics and A/B comparison are coming in a follow-up slice."
-        />
-      )}
+      {activeTab === "dashboard" && <DashboardTab connected={connected} />}
+      {activeTab === "adhoc" && <AdhocTab hasConfig={hasConfig} />}
+      {activeTab === "rag_eval" && <RagEvalTab connected={connected} />}
     </div>
   );
 }

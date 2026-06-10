@@ -26,8 +26,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from multihop_eval.logging_setup import configure_logging
+from multihop_eval.web.routers import adhoc as adhoc_router
 from multihop_eval.web.routers import config as config_router
 from multihop_eval.web.routers import connection as connection_router
+from multihop_eval.web.routers import dashboard as dashboard_router
+from multihop_eval.web.routers import rag_eval as rag_eval_router
 from multihop_eval.web.routers import run as run_router
 
 configure_logging(os.getenv("LOG_LEVEL", "INFO"))
@@ -42,6 +45,9 @@ app = FastAPI(
 app.include_router(connection_router.router)
 app.include_router(config_router.router)
 app.include_router(run_router.router)
+app.include_router(dashboard_router.router)
+app.include_router(adhoc_router.router)
+app.include_router(rag_eval_router.router)
 
 
 @app.get("/health", include_in_schema=False)

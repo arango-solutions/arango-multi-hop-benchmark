@@ -126,3 +126,81 @@ class RunStatusResponse(BaseModel):
     summary: dict[str, Any] | None = None
     error: str | None = None
     log: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+
+class DashboardResponse(BaseModel):
+    """KPI summary + accepted rows for the Dashboard tab.
+
+    ``source`` is either ``"session"`` (the in-memory result of the last run)
+    or ``"arango"`` (rows previously persisted to the QA collection).
+    """
+
+    source: Literal["session", "arango"]
+    available: bool
+    summary: dict[str, Any] | None = None
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    row_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Ad-hoc evaluation
+# ---------------------------------------------------------------------------
+
+
+class AdhocRequest(BaseModel):
+    """A single QA pair + its proof and source docs to validate.
+
+    ``proof`` entries are ``{"point": str, "source_id": str}`` dicts and
+    ``sources`` entries must each carry an ``_id`` (plus ``content`` for the
+    multi-hop / proof checks) — mirroring ``AdhocEvaluator.evaluate``.
+    """
+
+    question: str = Field(..., min_length=1)
+    answer: str = Field(..., min_length=1)
+    reasoning_chain: str = ""
+    proof: list[dict[str, Any]] = Field(default_factory=list)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    score_with_rubric: bool = False
+
+
+class AdhocResponse(BaseModel):
+    multi_hop_pass: bool
+    genuine_hop_count: int
+    multi_hop_reason: str
+    proof_verdict: str
+    corrected_proof: list[dict[str, Any]] = Field(default_factory=list)
+    rubric_scores: dict[str, Any] = Field(default_factory=dict)
+    rubric_weighted_score: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# RAG evaluation
+# ---------------------------------------------------------------------------
+
+
+class RagEvalRequest(BaseModel):
+    """Knobs + response source for one RAG-evaluation run."""
+
+    relevance_mode: Literal["binary", "graded"] = "binary"
+    k_values: list[int] = Field(default_factory=lambda: [1, 3, 5, 10])
+    response_source: Literal["jsonl", "arango"] = "jsonl"
+    response_arango_collection: str = "rag_responses_v1"
+    system_filter: list[str] = Field(default_factory=list)
+    length_z_threshold: float = 2.0
+    groundedness_fuzz_threshold: int = 75
+    empty_retrieval_min_score: float | None = None
+    jsonl_text: str | None = None
+    golden_limit: int | None = None
+
+
+class RagEvalResponse(BaseModel):
+    runs: list[dict[str, Any]] = Field(default_factory=list)
+    n_goldens: int = 0
+    n_responses: int = 0
+    n_systems: int = 0
+    load_errors: list[str] = Field(default_factory=list)

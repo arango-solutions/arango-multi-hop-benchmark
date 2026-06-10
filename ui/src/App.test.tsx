@@ -47,9 +47,19 @@ vi.mock("./api/client", () => ({
       error: null,
       log: [],
     }),
+    dashboardSummary: vi.fn().mockResolvedValue({
+      source: "session",
+      available: false,
+      summary: null,
+      rows: [],
+      row_count: 0,
+    }),
+    adhocEvaluate: vi.fn(),
+    ragEvalEvaluate: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
   runEventsUrl: () => "/run/events",
+  downloadFile: vi.fn(),
 }));
 
 import { App } from "./App";
@@ -78,9 +88,27 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a coming-soon placeholder for the Dashboard tab", async () => {
+  it("renders the Dashboard tab", async () => {
     render(<App />);
     await userEvent.click(screen.getByRole("tab", { name: "Dashboard" }));
-    expect(screen.getByText(/coming in a follow-up slice/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Dashboard" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the Ad-hoc tab", async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole("tab", { name: "Ad-hoc" }));
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Ad-hoc" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the RAG Eval tab", async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole("tab", { name: "RAG Eval" }));
+    expect(
+      screen.getByRole("heading", { level: 2, name: "RAG Eval" }),
+    ).toBeInTheDocument();
   });
 });

@@ -15,6 +15,9 @@ export default defineConfig({
       "/config": "http://localhost:8000",
       "/run": "http://localhost:8000",
       "/health": "http://localhost:8000",
+      "/dashboard": "http://localhost:8000",
+      "/adhoc": "http://localhost:8000",
+      "/rag_eval": "http://localhost:8000",
     },
   },
   build: {

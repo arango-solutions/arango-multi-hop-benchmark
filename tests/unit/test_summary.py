@@ -14,7 +14,7 @@ from multihop_eval.generation.models import (
     RubricScore,
     RunResult,
 )
-from multihop_eval.generation.summary import build_summary
+from multihop_eval.generation.summary import build_summary, summary_from_qa_rows
 
 
 def _accepted(
@@ -130,3 +130,73 @@ def test_summary_handles_partial_rubric_coverage():
     assert s.total_accepted == 2
     assert s.rubric_means == {"factuality": 5.0}
     assert s.avg_weighted_rubric == pytest.approx(0.9)
+
+
+# ---------------------------------------------------------------------------
+# summary_from_qa_rows (persisted Arango rows)
+# ---------------------------------------------------------------------------
+
+
+def _row(
+    *,
+    cluster: str = "cluster_0",
+    persona: str = "analyst",
+    hops: int = 2,
+    weighted: float | None = 4.0,
+    rubric: dict | None = None,
+) -> dict:
+    return {
+        "cluster_id": cluster,
+        "hop_count": hops,
+        "persona": persona,
+        "question": "Q?",
+        "answer": "A.",
+        "rubric_scores": rubric or {},
+        "rubric_weighted_score": weighted,
+    }
+
+
+def test_summary_from_qa_rows_empty():
+    s = summary_from_qa_rows([])
+    assert s.total_accepted == 0
+    assert s.total_rejected == 0
+    assert s.avg_hop_count is None
+    assert s.avg_weighted_rubric is None
+    assert s.duration_s is None
+
+
+def test_summary_from_qa_rows_counts_and_distributions():
+    rows = [
+        _row(hops=2, persona="analyst", cluster="cluster_0"),
+        _row(hops=3, persona="expert", cluster="cluster_0"),
+        _row(hops=3, persona="analyst", cluster="cluster_1"),
+    ]
+    s = summary_from_qa_rows(rows)
+    assert s.total_accepted == 3
+    assert s.total_rejected == 0
+    assert s.hop_distribution == {2: 1, 3: 2}
+    assert s.persona_distribution == {"analyst": 2, "expert": 1}
+    assert s.cluster_coverage == {"cluster_0": 2, "cluster_1": 1}
+    assert s.cluster_achieved == {"cluster_0": 2, "cluster_1": 1}
+    assert s.avg_hop_count == pytest.approx((2 + 3 + 3) / 3)
+
+
+def test_summary_from_qa_rows_rubric_means_and_weighted():
+    rows = [
+        _row(rubric={"factuality": {"score": 5, "justification": "ok"}}, weighted=4.5),
+        _row(rubric={"factuality": {"score": 3, "justification": "ok"}}, weighted=3.5),
+    ]
+    s = summary_from_qa_rows(rows)
+    assert s.rubric_means["factuality"] == pytest.approx(4.0)
+    assert s.avg_weighted_rubric == pytest.approx(4.0)
+
+
+def test_summary_from_qa_rows_tolerates_malformed_rows():
+    rows = [
+        {"persona": "analyst"},  # no hop_count, no cluster_id, no rubric
+        _row(hops=2, weighted=None),
+    ]
+    s = summary_from_qa_rows(rows)
+    assert s.total_accepted == 2
+    assert s.avg_hop_count == pytest.approx(2.0)
+    assert s.avg_weighted_rubric is None
