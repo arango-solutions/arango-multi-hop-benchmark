@@ -79,9 +79,9 @@ describe("App", () => {
     document.documentElement.classList.remove("dark");
   });
 
-  it("renders all five tabs with Configure active by default", () => {
+  it("renders all six tabs with Configure active by default", () => {
     render(<App />);
-    for (const label of ["Configure", "Run", "Dashboard", "Ad-hoc", "RAG Eval"]) {
+    for (const label of ["Configure", "Run", "Dashboard", "Ad-hoc", "RAG Eval", "How-To"]) {
       expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole("tab", { name: "Configure" })).toHaveAttribute(
@@ -148,5 +148,14 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "RAG Eval" }),
     ).toBeInTheDocument();
+  });
+
+  it("renders the How-To tab", async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole("tab", { name: "How-To" }));
+    expect(
+      screen.getByRole("heading", { level: 2, name: "How-To" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Quick start/i)).toBeInTheDocument();
   });
 });

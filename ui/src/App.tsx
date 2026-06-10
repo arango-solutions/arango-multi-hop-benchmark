@@ -6,8 +6,9 @@ import { RunTab } from "./components/RunTab";
 import { DashboardTab } from "./components/DashboardTab";
 import { AdhocTab } from "./components/AdhocTab";
 import { RagEvalTab } from "./components/RagEvalTab";
+import { HowToTab } from "./components/HowToTab";
 
-type TabId = "configure" | "run" | "dashboard" | "adhoc" | "rag_eval";
+type TabId = "configure" | "run" | "dashboard" | "adhoc" | "rag_eval" | "how_to";
 type Theme = "light" | "dark";
 
 const THEME_STORAGE_KEY = "multihop-eval-theme";
@@ -18,6 +19,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "adhoc", label: "Ad-hoc" },
   { id: "rag_eval", label: "RAG Eval" },
+  { id: "how_to", label: "How-To" },
 ];
 
 function getInitialTheme(): Theme {
@@ -113,6 +115,7 @@ export function App() {
       {activeTab === "dashboard" && <DashboardTab connected={connected} />}
       {activeTab === "adhoc" && <AdhocTab hasConfig={hasConfig} />}
       {activeTab === "rag_eval" && <RagEvalTab connected={connected} />}
+      {activeTab === "how_to" && <HowToTab />}
     </div>
   );
 }
