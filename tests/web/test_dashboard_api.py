@@ -16,7 +16,7 @@ from multihop_eval.generation.models import (
     RunResult,
 )
 from multihop_eval.web.run_manager import RunHandle
-from multihop_eval.web.sessions import SESSION_HEADER, STATUS_CONNECTED_MANUAL, store
+from multihop_eval.web.sessions import SESSION_HEADER, store
 
 
 def _accepted() -> AcceptedQA:
