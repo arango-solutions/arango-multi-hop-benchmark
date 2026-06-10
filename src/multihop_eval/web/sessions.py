@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import secrets
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from multihop_eval.clients.amp import AmpEnv
 from multihop_eval.clients.arango_gateway import ArangoGateway, CollectionInfo
@@ -48,6 +49,10 @@ class ServerSession:
 
     app_config: AppConfig | None = None
     run: RunHandle | None = None
+
+    # Cached result of the most recent RAG-eval run (list[RagEvalRun]); kept
+    # as Any to avoid importing the rag_eval models into the session module.
+    rag_eval_runs: list[Any] | None = field(default=None)
 
     def is_connected(self) -> bool:
         return self.conn_status in {STATUS_CONNECTED_AMP, STATUS_CONNECTED_MANUAL}

@@ -13,7 +13,10 @@ from fastapi.testclient import TestClient
 from multihop_eval.clients.arango_gateway import CollectionInfo
 from multihop_eval.web import service, sessions
 from multihop_eval.web.routers import connection as connection_router
-from multihop_eval.web.sessions import SESSION_HEADER
+from multihop_eval.web.sessions import (
+    SESSION_HEADER,
+    STATUS_CONNECTED_MANUAL,
+)
 
 
 class FakeGateway:
@@ -54,6 +57,29 @@ def patch_gateway(monkeypatch) -> type[FakeGateway]:
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(service.app)
+
+
+@pytest.fixture
+def fake_arango_with_qa(fake_arango):
+    """A connected session whose gateway has one persisted QA row; yields token."""
+    fake_arango.insert_qa_row(
+        {
+            "cluster_id": "cluster_0",
+            "partition_id": "p0",
+            "hop_count": 3,
+            "persona": "analyst",
+            "reasoning_chain": "a -> b -> c",
+            "question": "Persisted question?",
+            "answer": "Persisted answer.",
+            "proof": "- [sources/1]\n  point",
+            "rubric_scores": {"factuality": {"score": 5, "justification": "great"}},
+            "rubric_weighted_score": 5.0,
+        }
+    )
+    session = sessions.store.get_or_create(None)
+    session.gateway = fake_arango
+    session.conn_status = STATUS_CONNECTED_MANUAL
+    return session.token
 
 
 @pytest.fixture

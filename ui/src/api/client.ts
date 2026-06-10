@@ -10,6 +10,8 @@
 // so the per-client session token rides in a custom `X-Arango-Session` header.
 
 import type {
+  AdhocRequest,
+  AdhocResponse,
   AmpInfo,
   ClustersResponse,
   CollectionsResponse,
@@ -17,7 +19,11 @@ import type {
   ConfigSaveRequest,
   ConnectionStatus,
   ConnectRequest,
+  DashboardResponse,
+  DashboardSource,
   DatabasesResponse,
+  RagEvalRequest,
+  RagEvalResponse,
   RunStatus,
 } from "./types";
 
@@ -132,6 +138,24 @@ export const api = {
   startRun: () => request<RunStatus>("/run/start", { method: "POST" }),
   stopRun: () => request<RunStatus>("/run/stop", { method: "POST" }),
   runStatus: () => request<RunStatus>("/run/status"),
+
+  // Dashboard
+  dashboardSummary: (source: DashboardSource) =>
+    request<DashboardResponse>(`/dashboard/summary?source=${source}`),
+
+  // Ad-hoc
+  adhocEvaluate: (body: AdhocRequest) =>
+    request<AdhocResponse>("/adhoc/evaluate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // RAG Eval
+  ragEvalEvaluate: (body: RagEvalRequest) =>
+    request<RagEvalResponse>("/rag_eval/evaluate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 /**
@@ -142,4 +166,29 @@ export function runEventsUrl(): string {
   const token = getToken();
   const q = token ? `?session=${encodeURIComponent(token)}` : "";
   return apiBase() + "/run/events" + q;
+}
+
+/**
+ * Fetch a binary/export endpoint and trigger a browser download. Unlike a
+ * plain `<a download>`, this sends the `X-Arango-Session` header so the
+ * backend can resolve the caller's session (where the run/result lives).
+ */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(apiBase() + path, {
+    headers: token ? { [SESSION_HEADER]: token } : {},
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, formatDetail(body.detail ?? body));
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
