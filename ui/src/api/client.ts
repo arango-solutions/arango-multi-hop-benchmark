@@ -2,11 +2,11 @@
 //
 // BYOC routing note: the SPA is served at …/frontend/ (AMP) or …/ui/ (local
 // dev). API endpoints live one level up, so a root-relative fetch("/run/start")
-// would hit the domain root (ArangoDB itself) instead of the service. We strip
+// would hit the domain root (Arango itself) instead of the service. We strip
 // whichever prefix the SPA is mounted under to recover the service base path,
 // exactly mirroring the arango-cypher reference.
 //
-// The ArangoDB platform proxy strips `Authorization: Bearer` for its own JWT,
+// The Arango platform proxy strips `Authorization: Bearer` for its own JWT,
 // so the per-client session token rides in a custom `X-Arango-Session` header.
 
 import type {

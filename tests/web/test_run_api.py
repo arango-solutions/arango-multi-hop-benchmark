@@ -48,7 +48,7 @@ def test_start_requires_connection(client: TestClient, app_config: AppConfig) ->
     session.app_config = app_config  # config but not connected
     resp = client.post("/run/start", headers={SESSION_HEADER: session.token})
     assert resp.status_code == 409
-    assert "Connect to ArangoDB" in resp.json()["detail"]
+    assert "Connect to Arango" in resp.json()["detail"]
 
 
 def test_start_status_and_sse_stream(

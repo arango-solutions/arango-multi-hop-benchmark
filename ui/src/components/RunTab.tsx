@@ -126,7 +126,7 @@ export function RunTab({ connected, hasConfig }: Props) {
 
       {!connected && (
         <div className="banner warn">
-          No live ArangoDB connection. Connect on the Configure tab before running.
+          No live Arango connection. Connect on the Configure tab before running.
         </div>
       )}
       {connected && !hasConfig && (

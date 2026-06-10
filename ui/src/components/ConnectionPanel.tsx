@@ -65,7 +65,7 @@ export function ConnectionPanel({ connection, onChange }: Props) {
 
   return (
     <div className="panel">
-      <h2>ArangoDB connection</h2>
+      <h2>Arango connection</h2>
 
       {status === "connected_amp" && (
         <div className="banner ok">
