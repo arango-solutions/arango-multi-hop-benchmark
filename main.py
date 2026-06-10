@@ -13,8 +13,19 @@ router without losing the original scheme/host.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 
 import uvicorn
+
+# The package lives under ``src/`` (src-layout). When the project is installed
+# (e.g. ``uv sync``) it's importable directly, but ServiceMaker/BYOC may run
+# ``python main.py`` against a venv that only has the dependencies installed and
+# not the project itself. Put ``src`` on the path so the import string passed to
+# uvicorn resolves regardless of how the environment was provisioned.
+_SRC = Path(__file__).resolve().parent / "src"
+if _SRC.is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 
 def main() -> None:
