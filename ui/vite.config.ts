@@ -1,13 +1,14 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 // `base: "./"` keeps every asset URL relative so the built SPA works under any
 // BYOC proxy subpath (e.g. /_service/uds/_global/<name>/frontend/) without a
 // rebuild. The dev proxy forwards API calls to the FastAPI backend on :8000.
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     proxy: {

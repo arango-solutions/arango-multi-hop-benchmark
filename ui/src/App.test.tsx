@@ -64,9 +64,19 @@ vi.mock("./api/client", () => ({
 
 import { App } from "./App";
 
+const storage = new Map<string, string>();
+
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    storage.clear();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => storage.set(key, value)),
+      removeItem: vi.fn((key: string) => storage.delete(key)),
+      clear: vi.fn(() => storage.clear()),
+    });
+    document.documentElement.classList.remove("dark");
   });
 
   it("renders all five tabs with Configure active by default", () => {
@@ -85,6 +95,34 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Run" }));
     expect(
       screen.getByRole("heading", { level: 2, name: "Run" }),
+    ).toBeInTheDocument();
+  });
+
+  it("defaults to light mode", () => {
+    render(<App />);
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(
+      screen.getByRole("button", { name: "Switch to dark mode" }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem("multihop-eval-theme")).toBe("light");
+  });
+
+  it("toggles and persists dark mode", async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Switch to dark mode" }));
+    expect(document.documentElement).toHaveClass("dark");
+    expect(localStorage.getItem("multihop-eval-theme")).toBe("dark");
+    expect(
+      screen.getByRole("button", { name: "Switch to light mode" }),
+    ).toBeInTheDocument();
+  });
+
+  it("loads a persisted dark mode preference", () => {
+    localStorage.setItem("multihop-eval-theme", "dark");
+    render(<App />);
+    expect(document.documentElement).toHaveClass("dark");
+    expect(
+      screen.getByRole("button", { name: "Switch to light mode" }),
     ).toBeInTheDocument();
   });
 
