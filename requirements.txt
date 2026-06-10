@@ -1,0 +1,20 @@
+# AUTO-GENERATED — do not edit by hand.
+# Regenerate with: bash scripts/sync-requirements.sh
+# Source of truth: pyproject.toml ([project].dependencies)
+#
+# Consumed by scripts/prepareproject.sh (Arango BYOC build hook). Local dev
+# and the Dockerfile install from pyproject.toml + uv.lock directly; this
+# file exists to give the BYOC venv a flat, pip-installable dependency list.
+fastapi>=0.110
+uvicorn[standard]>=0.30
+python-arango>=8.1
+openpyxl>=3.1
+requests>=2.32
+python-dotenv>=1.0
+pydantic>=2.7
+pydantic-settings>=2.5
+pandas>=2.2
+altair>=5.4
+rouge-score>=0.1.2
+pysbd>=0.3.4
+rapidfuzz>=3.9
