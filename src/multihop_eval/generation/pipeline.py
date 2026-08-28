@@ -30,7 +30,7 @@ from multihop_eval.clients.llm_client import (
     extract_json,
     strip_citations,
 )
-from multihop_eval.config import EvalConfig
+from multihop_eval.config import DEFAULT_PROJECT_NAME, EvalConfig, default_collection_names
 from multihop_eval.generation.models import (
     AcceptedQA,
     ProofPoint,
@@ -83,7 +83,9 @@ class GenerationPipeline:
         *,
         llm: LLMClient,
         max_verify_rounds: int = 3,
-        domains_collection: str = "multihop_eval_domains",
+        domains_collection: str = default_collection_names(DEFAULT_PROJECT_NAME)[
+            "domains_collection"
+        ],
     ) -> None:
         self.llm = llm
         self.max_verify_rounds = max_verify_rounds
@@ -469,9 +471,18 @@ class EvaluationOrchestrator:
         self.llm = llm
         self.eval_config = eval_config
         self.rubric_evaluator = rubric_evaluator
-        self.pipeline = GenerationPipeline(
-            llm=llm, max_verify_rounds=eval_config.max_verify_rounds
-        )
+        pipeline_kwargs: dict[str, Any] = {
+            "llm": llm,
+            "max_verify_rounds": eval_config.max_verify_rounds,
+        }
+        # Propagate the configured domains collection (derived from the Autograph
+        # project name) so stored cluster ids match the real collection. Fakes in
+        # tests that don't expose `config` simply fall back to the default.
+        gateway_config = getattr(gateway, "config", None)
+        domains_collection = getattr(gateway_config, "domains_collection", None)
+        if domains_collection:
+            pipeline_kwargs["domains_collection"] = domains_collection
+        self.pipeline = GenerationPipeline(**pipeline_kwargs)
 
     def run(
         self,

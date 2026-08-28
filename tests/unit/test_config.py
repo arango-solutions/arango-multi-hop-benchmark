@@ -17,6 +17,7 @@ from multihop_eval.config import (
     LangFuseConfig,
     LLMConfig,
     RagEvalConfig,
+    default_collection_names,
 )
 from multihop_eval.generation.personas import DEFAULT_PERSONAS, Persona
 from multihop_eval.generation.rubric import DEFAULT_RUBRIC, RubricField
@@ -42,6 +43,94 @@ def test_arango_config_env_override(monkeypatch):
     assert cfg.db == "envdb"
     assert cfg.qa_collection == "qa_overridden"
     assert cfg.password.get_secret_value() == "envpw"
+
+
+def test_default_collection_names_derives_full_set():
+    names = default_collection_names("acme")
+    assert names == {
+        "similarity_collection": "acme_similarities",
+        "relations_collection": "acme_corpus_relations",
+        "rags_collection": "acme_rags",
+        "sources_collection": "acme_sources",
+        "domains_collection": "acme_domains",
+        "qa_collection": "qa_pairs_acme_v1",
+    }
+
+
+def test_default_collection_names_strips_whitespace():
+    assert default_collection_names("  acme  ")["domains_collection"] == "acme_domains"
+
+
+def test_default_collection_names_rejects_empty():
+    with pytest.raises(ValueError):
+        default_collection_names("   ")
+
+
+def test_arango_config_default_project_name_matches_legacy_collections():
+    # `_env_file=None` isolates the test from any local `.env` that may pin
+    # collection names, so we exercise the pure derivation path.
+    cfg = ArangoConfig(host="https://x.example.com", db="d", password="p", _env_file=None)  # type: ignore[arg-type]
+    assert cfg.project_name == DEFAULT_PROJECT_NAME
+    assert cfg.similarity_collection == "multihop_eval_similarities"
+    assert cfg.relations_collection == "multihop_eval_corpus_relations"
+    assert cfg.rags_collection == "multihop_eval_rags"
+    assert cfg.sources_collection == "multihop_eval_sources"
+    assert cfg.domains_collection == "multihop_eval_domains"
+    assert cfg.qa_collection == "qa_pairs_multihop_eval_v1"
+
+
+def test_arango_config_project_name_propagates_to_all_collections():
+    cfg = ArangoConfig(
+        host="https://x.example.com",  # type: ignore[arg-type]
+        db="d",
+        password="p",
+        project_name="acme",
+        _env_file=None,
+    )
+    assert cfg.similarity_collection == "acme_similarities"
+    assert cfg.relations_collection == "acme_corpus_relations"
+    assert cfg.rags_collection == "acme_rags"
+    assert cfg.sources_collection == "acme_sources"
+    assert cfg.domains_collection == "acme_domains"
+    assert cfg.qa_collection == "qa_pairs_acme_v1"
+
+
+def test_arango_config_explicit_collection_overrides_survive_project_name():
+    cfg = ArangoConfig(
+        host="https://x.example.com",  # type: ignore[arg-type]
+        db="d",
+        password="p",
+        project_name="acme",
+        domains_collection="custom_domains",
+        _env_file=None,
+    )
+    # Overridden field is kept verbatim; the rest still derive from the project.
+    assert cfg.domains_collection == "custom_domains"
+    assert cfg.sources_collection == "acme_sources"
+
+
+def test_arango_config_project_name_env_override(monkeypatch):
+    monkeypatch.setenv("ARANGO_HOST", "https://from-env.example.com")
+    monkeypatch.setenv("ARANGO_DB", "envdb")
+    monkeypatch.setenv("ARANGO_PASSWORD", "envpw")
+    monkeypatch.setenv("ARANGO_PROJECT_NAME", "envproj")
+    # `_env_file=None` so the local `.env`'s pinned collection names don't mask
+    # the derivation we're asserting here.
+    cfg = ArangoConfig(_env_file=None)  # type: ignore[call-arg]
+    assert cfg.project_name == "envproj"
+    assert cfg.domains_collection == "envproj_domains"
+    assert cfg.qa_collection == "qa_pairs_envproj_v1"
+
+
+def test_arango_config_rejects_empty_project_name():
+    with pytest.raises(ValidationError):
+        ArangoConfig(
+            host="https://x.example.com",  # type: ignore[arg-type]
+            db="d",
+            password="p",
+            project_name="  ",
+            _env_file=None,
+        )
 
 
 def test_llm_config_env_override(monkeypatch):

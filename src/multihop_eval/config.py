@@ -34,6 +34,35 @@ RAG_RELEVANCE_GRADED = "graded"
 
 AUTH_MODE_PASSWORD = "password"
 AUTH_MODE_JWT = "jwt"
+DEFAULT_PROJECT_NAME = "multihop_eval"
+
+# Every collection an Autograph project creates shares the project name. Each
+# entry maps an `ArangoConfig` field to the template used to derive its default
+# name from the project name, so the whole set can be propagated from one value.
+COLLECTION_NAME_TEMPLATES: dict[str, str] = {
+    "similarity_collection": "{project}_similarities",
+    "relations_collection": "{project}_corpus_relations",
+    "rags_collection": "{project}_rags",
+    "sources_collection": "{project}_sources",
+    "domains_collection": "{project}_domains",
+    "qa_collection": "qa_pairs_{project}_v1",
+}
+
+
+def default_collection_names(project_name: str) -> dict[str, str]:
+    """Derive every Autograph collection name from a single project name.
+
+    Raises ``ValueError`` when ``project_name`` is empty/whitespace so callers
+    (including pydantic validators) surface a clear error instead of silently
+    producing names like ``_domains``.
+    """
+    project = project_name.strip()
+    if not project:
+        raise ValueError("Autograph project name must not be empty.")
+    return {
+        field: template.format(project=project)
+        for field, template in COLLECTION_NAME_TEMPLATES.items()
+    }
 
 
 def _env_file_candidates() -> tuple[str, ...]:
@@ -85,12 +114,24 @@ class ArangoConfig(BaseSettings):
         description="Optional path to the deployment's CA PEM (used to verify TLS in AMP).",
     )
 
-    similarity_collection: str = "multihop_eval_similarities"
-    relations_collection: str = "multihop_eval_corpus_relations"
-    rags_collection: str = "multihop_eval_rags"
-    sources_collection: str = "multihop_eval_sources"
-    domains_collection: str = "multihop_eval_domains"
-    qa_collection: str = "qa_pairs_multihop_eval_v1"
+    project_name: str = Field(
+        default=DEFAULT_PROJECT_NAME,
+        description=(
+            "Autograph project name. Every collection below defaults to "
+            "'<project>_<suffix>' (e.g. '<project>_domains') and is derived from "
+            "this value unless overridden explicitly."
+        ),
+    )
+
+    # Left empty by default so they are derived from `project_name` in the
+    # model validator below. Set any of them explicitly to override that
+    # collection's name while still propagating the project name to the rest.
+    similarity_collection: str = ""
+    relations_collection: str = ""
+    rags_collection: str = ""
+    sources_collection: str = ""
+    domains_collection: str = ""
+    qa_collection: str = ""
 
     @field_validator("host")
     @classmethod
@@ -145,6 +186,24 @@ class ArangoConfig(BaseSettings):
             if value:
                 kwargs[key] = value
         return cls(**kwargs)  # type: ignore[arg-type]
+
+    def _derive_collection_names(self) -> ArangoConfig:
+        """Fill any unset collection name from the project name.
+
+        A collection field is considered "unset" when it is empty/whitespace,
+        which is how the UI and env layers signal "derive this for me". Fields
+        the user set explicitly are left untouched so overrides survive.
+
+        The project name is only required when at least one field still needs
+        deriving; a fully-explicit config with a blank project name is allowed.
+        """
+        unset = [f for f in COLLECTION_NAME_TEMPLATES if not str(getattr(self, f) or "").strip()]
+        if not unset:
+            return self
+        derived = default_collection_names(self.project_name)
+        for field in unset:
+            setattr(self, field, derived[field])
+        return self
 
 
 class LLMConfig(BaseSettings):
