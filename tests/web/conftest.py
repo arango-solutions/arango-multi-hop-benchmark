@@ -20,13 +20,22 @@ from multihop_eval.web.sessions import (
 
 
 class FakeGateway:
-    """Mimics the ArangoGateway surface the connection/config routers touch."""
+    """Mimics the ArangoGateway surface the connection/config routers touch.
+
+    Set the class attribute :attr:`connection_error` to simulate Arango
+    refusing the connection (the router must surface the message verbatim).
+    """
+
+    connection_error: str | None = None
 
     def __init__(self, config, *, client=None) -> None:  # noqa: ARG002 - signature parity
         self.config = config
 
+    def verify_connection(self) -> str | None:
+        return type(self).connection_error
+
     def ping(self) -> bool:
-        return True
+        return self.verify_connection() is None
 
     def list_databases(self) -> list[str]:
         return ["_system", "ingest_bench_db"]

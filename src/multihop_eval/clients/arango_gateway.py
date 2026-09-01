@@ -82,14 +82,42 @@ class ArangoGateway:
     # Connection sanity
     # ------------------------------------------------------------------
 
-    def ping(self) -> bool:
-        """Return True if we can talk to the database."""
+    def verify_connection(self) -> str | None:
+        """Return ``None`` if the database is reachable, else why it is not.
+
+        The message is surfaced verbatim in the UI. Collapsing it to a bool
+        (as :meth:`ping` does) forces the user to read the server log to find
+        out whether Arango said 401, 404, or refused the TLS handshake.
+        """
         try:
             self._db.properties()
-            return True
-        except Exception as exc:  # pragma: no cover - exercised in integration only
+        except Exception as exc:  # noqa: BLE001 - every reason must reach the user
             log.warning("Arango ping failed: %s", exc)
-            return False
+            return self._explain_failure(exc)
+        return None
+
+    def _explain_failure(self, exc: Exception) -> str:
+        """Turn a driver exception into something a user can act on."""
+        message = str(exc)
+        if getattr(exc, "http_code", None) != 401:
+            return message
+        if self.config.auth_mode == AUTH_MODE_JWT:
+            return (
+                f"{message} — Arango rejected the JWT at "
+                f"{self.config.jwt_token_path!r}. It may have expired, or the "
+                f"deployment may not grant it access to database "
+                f"{self.config.db!r}."
+            )
+        return (
+            f"{message} — Arango rejected the credentials for user "
+            f"{self.config.username!r}. Check the password, and check that this "
+            f"user is granted access to database {self.config.db!r}: a user can "
+            f"authenticate successfully and still be denied a specific database."
+        )
+
+    def ping(self) -> bool:
+        """Return True if we can talk to the database."""
+        return self.verify_connection() is None
 
     def refresh_token(self) -> None:
         """Re-read the JWT from disk and push it onto the live connection.
