@@ -33,9 +33,6 @@ langfuse = [
   "langfuse>=2.40",
 ]
 
-[project.scripts]
-multihop-eval = "multihop_eval.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
