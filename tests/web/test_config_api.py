@@ -84,6 +84,49 @@ def test_save_config_persists_and_redacts_secrets(
     assert again["saved"]["llm"]["model"] == "gpt-4.1"
 
 
+def test_save_config_project_name_propagates_to_collections(
+    client: TestClient, patch_gateway, connect_manual
+) -> None:
+    token = connect_manual(client)
+    resp = client.post(
+        "/config",
+        headers={SESSION_HEADER: token},
+        json={
+            "project_name": "acme",
+            "collections": {},
+            "llm": VALID_LLM,
+            "eval": VALID_EVAL,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    arango = resp.json()["saved"]["arango"]
+    assert arango["project_name"] == "acme"
+    assert arango["domains_collection"] == "acme_domains"
+    assert arango["sources_collection"] == "acme_sources"
+    assert arango["qa_collection"] == "qa_pairs_acme_v1"
+
+
+def test_save_config_explicit_override_wins_over_project_name(
+    client: TestClient, patch_gateway, connect_manual
+) -> None:
+    token = connect_manual(client)
+    resp = client.post(
+        "/config",
+        headers={SESSION_HEADER: token},
+        json={
+            "project_name": "acme",
+            "collections": {"domains_collection": "custom_domains"},
+            "llm": VALID_LLM,
+            "eval": VALID_EVAL,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    arango = resp.json()["saved"]["arango"]
+    # Explicit override survives; the rest still derive from the project name.
+    assert arango["domains_collection"] == "custom_domains"
+    assert arango["sources_collection"] == "acme_sources"
+
+
 def test_save_config_validation_error_is_422(
     client: TestClient, patch_gateway, connect_manual
 ) -> None:

@@ -27,6 +27,21 @@ const COLLECTION_ROLES: { key: string; label: string }[] = [
   { key: "qa_collection", label: "QA collection (output)" },
 ];
 
+// Every Autograph collection name is derived from the project name. Kept in
+// sync with COLLECTION_NAME_TEMPLATES in multihop_eval/config.py so the live
+// preview here matches what the backend derives on save.
+function deriveCollections(projectName: string): Record<string, string> {
+  const p = projectName.trim();
+  return {
+    similarity_collection: `${p}_similarities`,
+    relations_collection: `${p}_corpus_relations`,
+    rags_collection: `${p}_rags`,
+    sources_collection: `${p}_sources`,
+    domains_collection: `${p}_domains`,
+    qa_collection: `qa_pairs_${p}_v1`,
+  };
+}
+
 interface EvalParams {
   target_clusters: string; // one per line
   n_questions: number;
@@ -43,6 +58,7 @@ export function ConfigureTab({
   onConnectionChange,
   refreshConfig,
 }: Props) {
+  const [projectName, setProjectName] = useState("");
   const [collections, setCollections] = useState<Record<string, string>>({});
   const [llm, setLlm] = useState<LLMConfig | null>(null);
   const [evalParams, setEvalParams] = useState<EvalParams | null>(null);
@@ -66,6 +82,12 @@ export function ConfigureTab({
           eval?: Record<string, unknown>;
         }
       | null;
+
+    const savedProject =
+      typeof saved?.arango?.project_name === "string"
+        ? saved.arango.project_name
+        : d.project_name;
+    setProjectName(savedProject ?? "");
 
     const coll: Record<string, string> = { ...d.collections };
     if (saved?.arango) {
@@ -110,6 +132,13 @@ export function ConfigureTab({
 
   const collectionNames = useMemo(() => discovered.map((c) => c.name), [discovered]);
 
+  // Typing a project name re-derives every collection field so the single name
+  // propagates everywhere; individual fields stay editable for overrides.
+  function onProjectNameChange(next: string) {
+    setProjectName(next);
+    if (next.trim()) setCollections(deriveCollections(next));
+  }
+
   async function fetchClusters() {
     const domains = collections.domains_collection;
     if (!domains) return;
@@ -147,6 +176,7 @@ export function ConfigureTab({
     setSaveMsg(null);
     try {
       await api.saveConfig({
+        project_name: projectName,
         collections,
         llm,
         eval: {
@@ -176,6 +206,27 @@ export function ConfigureTab({
   return (
     <div>
       <ConnectionPanel connection={connection} onChange={onConnectionChange} />
+
+      <div className="panel">
+        <h2>Autograph project</h2>
+        <div className="field">
+          <label htmlFor="project-name">Autograph project name</label>
+          <input
+            id="project-name"
+            type="text"
+            value={projectName}
+            placeholder="multihop_eval"
+            onChange={(e) => onProjectNameChange(e.target.value)}
+          />
+          <p className="muted">
+            Every collection below is derived from this as{" "}
+            <code>&lt;project&gt;_&lt;suffix&gt;</code> (and{" "}
+            <code>qa_pairs_&lt;project&gt;_v1</code> for the QA output), so setting it
+            once propagates the name everywhere. Edit an individual field below to
+            override just that collection.
+          </p>
+        </div>
+      </div>
 
       <div className="panel">
         <h2>Collections</h2>

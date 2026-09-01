@@ -11,6 +11,7 @@ from multihop_eval.clients.amp import AmpEnv
 from multihop_eval.config import (
     AUTH_MODE_JWT,
     AUTH_MODE_PASSWORD,
+    DEFAULT_PROJECT_NAME,
     AppConfig,
     ArangoConfig,
     EvalConfig,
@@ -276,7 +277,9 @@ def test_langfuse_config_is_configured_when_enabled_with_creds(monkeypatch):
 def test_arango_config_password_mode_requires_password():
     """Default auth_mode='password' rejects a missing or empty password."""
     with pytest.raises(ValidationError):
-        ArangoConfig(host="https://x.example.com", db="d")  # type: ignore[call-arg]
+        # `_env_file=None` so a local `.env`'s ARANGO_PASSWORD can't mask the
+        # "missing password" path we're asserting here.
+        ArangoConfig(host="https://x.example.com", db="d", _env_file=None)  # type: ignore[call-arg]
 
 
 def test_arango_config_jwt_mode_does_not_require_password():
@@ -285,6 +288,7 @@ def test_arango_config_jwt_mode_does_not_require_password():
         db="d",
         auth_mode=AUTH_MODE_JWT,
         jwt_token_path="/var/run/secrets/arango/token/token",
+        _env_file=None,
     )  # type: ignore[call-arg]
     assert cfg.auth_mode == AUTH_MODE_JWT
     assert cfg.password is None
@@ -334,6 +338,7 @@ def test_arango_config_to_safe_dict_handles_jwt_mode(tmp_path):
             db="d",
             auth_mode=AUTH_MODE_JWT,
             jwt_token_path=str(token_file),
+            _env_file=None,
         ),  # type: ignore[call-arg]
         llm=LLMConfig(api_key="sk"),  # type: ignore[arg-type]
     )

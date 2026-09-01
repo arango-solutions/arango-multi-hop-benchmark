@@ -187,6 +187,7 @@ class ArangoConfig(BaseSettings):
                 kwargs[key] = value
         return cls(**kwargs)  # type: ignore[arg-type]
 
+    @model_validator(mode="after")
     def _derive_collection_names(self) -> ArangoConfig:
         """Fill any unset collection name from the project name.
 

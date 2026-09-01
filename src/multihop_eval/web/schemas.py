@@ -11,6 +11,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from multihop_eval.config import DEFAULT_PROJECT_NAME
+
 # ---------------------------------------------------------------------------
 # Connection
 # ---------------------------------------------------------------------------
@@ -101,9 +103,11 @@ class ConfigSaveRequest(BaseModel):
     """Everything the Configure tab gathers, minus Arango credentials.
 
     Arango credentials come from the live gateway on the session (set during
-    connect); only collection-role overrides are supplied here.
+    connect); the Autograph project name + collection-role overrides are
+    supplied here.
     """
 
+    project_name: str = DEFAULT_PROJECT_NAME
     collections: dict[str, str] = Field(default_factory=dict)
     llm: LLMConfigModel
     eval: EvalConfigModel

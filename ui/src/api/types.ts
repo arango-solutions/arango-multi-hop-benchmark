@@ -77,6 +77,7 @@ export interface EvalConfig {
 }
 
 export interface ConfigDefaults {
+  project_name: string;
   collections: Record<string, string>;
   llm: LLMConfig;
   eval: Omit<EvalConfig, "personas" | "rubric_fields">;
@@ -85,6 +86,7 @@ export interface ConfigDefaults {
 }
 
 export interface ConfigSaveRequest {
+  project_name: string;
   collections: Record<string, string>;
   llm: LLMConfig;
   eval: EvalConfig;

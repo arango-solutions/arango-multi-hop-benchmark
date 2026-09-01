@@ -13,7 +13,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
-from multihop_eval.config import AppConfig, ArangoConfig, EvalConfig, LLMConfig
+from multihop_eval.config import (
+    DEFAULT_PROJECT_NAME,
+    AppConfig,
+    ArangoConfig,
+    EvalConfig,
+    LLMConfig,
+    default_collection_names,
+)
 from multihop_eval.generation.personas import DEFAULT_PERSONAS
 from multihop_eval.generation.rubric import DEFAULT_RUBRIC
 from multihop_eval.web.routers.deps import get_session
@@ -25,17 +32,9 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 def _defaults() -> dict[str, Any]:
     """Default values used to prefill the Configure form on first load."""
-    arango_defaults = ArangoConfig.model_fields
-    collection_roles = (
-        "sources_collection",
-        "similarity_collection",
-        "relations_collection",
-        "domains_collection",
-        "rags_collection",
-        "qa_collection",
-    )
     return {
-        "collections": {role: arango_defaults[role].default for role in collection_roles},
+        "project_name": DEFAULT_PROJECT_NAME,
+        "collections": default_collection_names(DEFAULT_PROJECT_NAME),
         "llm": {
             "api_url": "https://api.openai.com/v1/chat/completions",
             "api_key": "",
@@ -71,9 +70,15 @@ def _defaults() -> dict[str, Any]:
 def _arango_config_from(
     session: ServerSession,
     *,
+    project_name: str,
     collection_overrides: dict[str, str],
 ) -> ArangoConfig:
-    """Clone the live gateway's config, overlaying the chosen collections."""
+    """Clone the live gateway's config, applying the chosen project + collections.
+
+    The Autograph project name propagates to every collection that the request
+    did not override explicitly: we clear the inherited (connect-time) names for
+    those roles so ``ArangoConfig`` re-derives them from ``project_name``.
+    """
     if session.gateway is None:
         raise HTTPException(
             status_code=409,
@@ -82,7 +87,11 @@ def _arango_config_from(
     base = session.gateway.config.model_dump()
     if session.gateway.config.password is not None:
         base["password"] = session.gateway.config.password.get_secret_value()
-    base.update({k: v for k, v in collection_overrides.items() if v})
+    if project_name.strip():
+        base["project_name"] = project_name
+    overrides = {k: v for k, v in collection_overrides.items() if v}
+    for role in default_collection_names(DEFAULT_PROJECT_NAME):
+        base[role] = overrides.get(role, "")
     return ArangoConfig(**base)  # type: ignore[arg-type]
 
 
@@ -97,7 +106,11 @@ def save_config(
     req: ConfigSaveRequest,
     session: ServerSession = Depends(get_session),
 ) -> ConfigResponse:
-    arango_cfg = _arango_config_from(session, collection_overrides=req.collections)
+    arango_cfg = _arango_config_from(
+        session,
+        project_name=req.project_name,
+        collection_overrides=req.collections,
+    )
     try:
         cfg = AppConfig(
             arango=arango_cfg,
