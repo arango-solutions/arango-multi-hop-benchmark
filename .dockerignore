@@ -14,8 +14,3 @@ env
 .git/
 .gitignore
 docs/
-# Node build artifacts — the Dockerfile's ui-build stage produces ui/dist
-# fresh, so neither node_modules nor a host-built dist should enter the context.
-node_modules/
-ui/node_modules/
-ui/dist/

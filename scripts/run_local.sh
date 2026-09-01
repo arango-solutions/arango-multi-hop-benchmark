@@ -1,31 +1,25 @@
 #!/usr/bin/env bash
-# Run the FastAPI service (React SPA + JSON API) locally on port 8000 —
+# Run the FastAPI service (static UI + JSON API) locally on port 8000 —
 # the same contract as BYOC.
 #
 # Usage:
-#   ./scripts/run_local.sh                 # build SPA if needed, serve at :8000
-#   PORT=8080 ./scripts/run_local.sh       # override port
-#   FORCE_UI_BUILD=1 ./scripts/run_local.sh  # rebuild the SPA first
+#   ./scripts/run_local.sh              # serve at :8000
+#   PORT=8080 ./scripts/run_local.sh    # override port
 #
-# The built SPA is served at http://localhost:8000/ui (and /frontend).
+# The UI is served at http://localhost:8000/ (and /ui, /frontend). There is
+# no build step: static/ ships exactly as it appears in the repo, so editing
+# a file under static/ and reloading the browser is the whole dev loop.
 #
-# For hot-reload development, run two terminals instead:
-#   1) uv run uvicorn multihop_eval.web.service:app --reload --port 8000
-#   2) cd ui && npm run dev      # http://localhost:5173 (proxies API to :8000)
+# For backend hot-reload:
+#   uv run uvicorn multihop_eval.web.service:app --reload --port 8000
 #
-# Requires: uv installed, Node.js 18+, `.env` populated (see .env.example).
+# Requires: uv installed, `.env` populated (see .env.example).
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 uv sync --extra dev
-
-# Build the SPA if it hasn't been built yet (or when FORCE_UI_BUILD=1).
-if [ ! -d ui/dist ] || [ "${FORCE_UI_BUILD:-0}" = "1" ]; then
-  echo "Building the React/Vite SPA into ui/dist ..."
-  (cd ui && npm install && npm run build)
-fi
 
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
