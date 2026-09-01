@@ -33,7 +33,7 @@ if [[ ! -f "${PYPROJECT}" ]]; then
 fi
 
 # Pick a Python with the stdlib `tomllib` (3.11+). Prefer the project venv,
-# which is pinned to 3.13. `tomllib` is guaranteed on the BYOC 3.13 runtime.
+# which is pinned to 3.12. `tomllib` is guaranteed on the BYOC 3.12 runtime.
 pick_python() {
     for candidate in "${REPO_ROOT}/.venv/bin/python" python3 python; do
         if command -v "${candidate}" >/dev/null 2>&1 \

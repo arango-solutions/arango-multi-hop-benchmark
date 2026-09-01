@@ -3,7 +3,7 @@ name = "multihop-eval"
 version = "1.0.0"
 description = "Multi-hop QA dataset generation, validation, and evaluation against ArangoDB graph data, packaged for Arango BYOC."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "Arango Multi-Hop Eval Team" }]
 dependencies = [
@@ -53,7 +53,7 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]

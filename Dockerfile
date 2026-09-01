@@ -5,13 +5,13 @@
 #
 # BYOC requires:
 #   - HTTP server on port 8000 at root path
-#   - Python 3.13
+#   - Python 3.12
 #   - dependencies via uv from pyproject.toml (no `--extra` packages)
 #
 # Stage 1 builds the SPA with Node; stage 2 is the Arango-published Python
 # base image (so ServiceMaker can extend it without re-pulling). If you build
 # locally on Apple Silicon, build the base image natively first:
-#   docker build -f Dockerfile.py13base -t arangodb/py13base:latest baseimages/
+#   docker build -f Dockerfile.py12base -t arangodb/py12base:latest baseimages/
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the React/Vite SPA into ui/dist
@@ -30,7 +30,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: Python backend (serves the built SPA + API)
 # ---------------------------------------------------------------------------
-FROM arangodb/py13base:latest
+FROM arangodb/py12base:latest
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
