@@ -1,0 +1,667 @@
+/* Multi-Hop Eval UI — hand-written CSS (no build step).
+ *
+ * Served verbatim from the BYOC archive, so there is no bundler, no
+ * PostCSS and no Tailwind at runtime. The avocado palette below is the
+ * single source of truth for theming; `:root.dark` flips it. */
+
+:root {
+  color-scheme: light;
+  --bg: #fdf7df;
+  --panel: #fffdf2;
+  --panel-2: #f4efcf;
+  --border: #d9dfa8;
+  --text: #233019;
+  --muted: #69784c;
+  --accent: #53783b;
+  --accent-hover: #7b964a;
+  --accent-text: #fffdf2;
+  --danger: #dc2626;
+  --warn: #b07900;
+  --ok: #53783b;
+  --shadow: 0 18px 45px rgba(83, 120, 59, 0.14);
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  font-family: var(--font-sans);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --bg: #12180e;
+  --panel: #1c2515;
+  --panel-2: #29351d;
+  --border: #4f6137;
+  --text: #fcefc2;
+  --muted: #c5d184;
+  --accent: #b3c656;
+  --accent-hover: #fcdb7e;
+  --accent-text: #1c2515;
+  --danger: #f87171;
+  --warn: #fcdb7e;
+  --ok: #b3c656;
+  --shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
+}
+
+/* --------------------------------------------------------------------- */
+/* Reset                                                                  */
+/* --------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+  background:
+    radial-gradient(circle at top left, rgba(179, 198, 86, 0.22), transparent 28rem),
+    var(--bg);
+  color: var(--text);
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+figure,
+pre {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+/* --------------------------------------------------------------------- */
+/* Form controls                                                          */
+/* --------------------------------------------------------------------- */
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="file"],
+select,
+textarea {
+  width: 100%;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+}
+
+textarea {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+button {
+  display: inline-flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button.danger {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+  color: var(--danger);
+}
+
+/* --------------------------------------------------------------------- */
+/* Shell                                                                  */
+/* --------------------------------------------------------------------- */
+
+.app {
+  margin-inline: auto;
+  max-width: 72rem;
+  padding: 1.5rem 1.25rem 4rem;
+}
+
+.app-header {
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.app-header .subtitle {
+  margin-top: 0.25rem;
+  display: block;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--muted);
+}
+
+.theme-toggle {
+  align-self: flex-start;
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .app-header {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .theme-toggle {
+    align-self: auto;
+  }
+}
+
+.tabs {
+  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-radius: 1rem;
+  padding: 0.25rem;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  border: 1px solid var(--border);
+}
+
+.tab {
+  white-space: nowrap;
+  border-radius: 0.75rem;
+  border: 0;
+  background: transparent;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--text);
+  box-shadow: none;
+}
+
+.tab.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* --------------------------------------------------------------------- */
+/* Panels and fields                                                      */
+/* --------------------------------------------------------------------- */
+
+.panel {
+  margin-bottom: 1rem;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.panel h2 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.panel h3 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.field {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.field label {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.row,
+.row-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .row-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox input {
+  width: auto;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.banner {
+  margin-bottom: 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: 1px solid transparent;
+}
+
+.banner.ok {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 65%, var(--border));
+}
+
+.banner.info {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+}
+
+.banner.warn {
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 68%, var(--border));
+}
+
+.banner.error {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 68%, var(--border));
+}
+
+.muted {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------- */
+/* Run progress and log                                                   */
+/* --------------------------------------------------------------------- */
+
+.progress {
+  position: relative;
+  height: 1.5rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.progress > .bar {
+  height: 100%;
+  transition: width 0.3s ease;
+  background: var(--accent);
+}
+
+.progress > .label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.log {
+  max-height: 24rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.625;
+  background: color-mix(in srgb, var(--panel-2) 70%, #000000);
+  border: 1px solid var(--border);
+}
+
+/* --------------------------------------------------------------------- */
+/* Tables                                                                 */
+/* --------------------------------------------------------------------- */
+
+.editable-table,
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.editable-table th,
+.editable-table td,
+.data-table th,
+.data-table td {
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid var(--border);
+}
+
+.editable-table th,
+.data-table th {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.editable-table input,
+.editable-table textarea {
+  border: 0;
+  background: transparent;
+  padding: 0.25rem;
+}
+
+.data-table {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+
+.table-scroll {
+  max-height: 420px;
+  overflow: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+}
+
+.num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------- */
+/* Badges and placeholders                                                */
+/* --------------------------------------------------------------------- */
+
+.status-pill,
+.badge {
+  display: inline-flex;
+  border-radius: 9999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+}
+
+.badge.pass {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 68%, var(--border));
+  color: var(--ok);
+}
+
+.badge.fail {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 68%, var(--border));
+  color: var(--danger);
+}
+
+.placeholder {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------- */
+/* Dashboard                                                              */
+/* --------------------------------------------------------------------- */
+
+.kpi-grid {
+  margin-bottom: 1rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .kpi-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.kpi {
+  border-radius: 1rem;
+  padding: 1rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.kpi .value {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.kpi .label {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.dist {
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dist-row {
+  display: grid;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  grid-template-columns: minmax(90px, 130px) 1fr 48px;
+}
+
+.dist-row .key {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.dist-track {
+  height: 1rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--panel-2);
+}
+
+.dist-track > .fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.dist-row .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------------- */
+/* How-To                                                                 */
+/* --------------------------------------------------------------------- */
+
+.howto-lead {
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--muted);
+}
+
+.howto-section {
+  margin-bottom: 1.5rem;
+}
+
+.howto-section:last-child {
+  margin-bottom: 0;
+}
+
+.howto-section > p {
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--text);
+}
+
+.howto-steps,
+.howto-list {
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--text);
+}
+
+.howto-steps > li + li,
+.howto-list > li + li {
+  margin-top: 0.5rem;
+}
+
+.howto-steps {
+  list-style: decimal;
+}
+
+.howto-list {
+  list-style: disc;
+}
+
+.howto code {
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.howto-code {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.625;
+  background: color-mix(in srgb, var(--panel-2) 70%, #000000);
+  border: 1px solid var(--border);
+}

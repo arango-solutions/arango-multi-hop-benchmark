@@ -1,19 +1,20 @@
-"""FastAPI application: serves the React/Vite SPA and the JSON API.
+"""FastAPI application: serves the static UI and the JSON API.
 
 Architecture (mirrors the arango-cypher BYOC reference):
 
 * API routes live at the container root (``/connection/*``, ``/config/*``,
   ``/run/*``, ``/health``).
-* The built SPA in ``ui/dist`` is served at ``/frontend`` (the AMP/BYOC proxy
-  target) and ``/ui`` (local-dev convenience) with an SPA fallback. Explicit
-  route handlers are used instead of ``StaticFiles`` mounts so the AMP proxy
-  doesn't trip over Starlette's trailing-slash 307 redirect.
-* Hashed Vite assets are served at ``/assets`` for builds that emit absolute
-  asset URLs.
+* The no-build UI in ``static/`` is served at ``/`` (the BYOC service root),
+  ``/frontend`` (the AMP proxy target) and ``/ui`` (local-dev convenience).
+  Explicit route handlers are used instead of ``StaticFiles`` mounts so the
+  AMP proxy doesn't trip over Starlette's trailing-slash 307 redirect.
+* A catch-all registered *after* every API router resolves ``css/`` and
+  ``js/`` when the UI is served at the service root, where relative asset
+  URLs land on ``/css/styles.css`` rather than under a ``/ui`` prefix.
 
 The platform proxy prefix (``/_service/uds/_global/<name>/``) is handled in
-the browser (Vite ``base: "./"`` + ``apiBase()``), so the container always
-sees clean root paths.
+the browser (relative URLs + ``apiBase()``), so the container always sees
+clean root paths.
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from multihop_eval.logging_setup import configure_logging
 from multihop_eval.web.routers import adhoc as adhoc_router
@@ -56,72 +56,89 @@ def health() -> JSONResponse:
 
 
 # ---------------------------------------------------------------------------
-# Static SPA serving (only when ui/dist has been built)
+# Static UI serving
 # ---------------------------------------------------------------------------
 
-_UI_DIR = Path(__file__).resolve().parents[3] / "ui" / "dist"
-_HTML_NO_CACHE = "no-cache, no-store, must-revalidate"
-_ASSET_IMMUTABLE = "public, max-age=31536000, immutable"
+_UI_DIR = Path(__file__).resolve().parents[3] / "static"
+# Nothing in ``static/`` is content-hashed, so a stale cached script paired
+# with a fresh index.html would silently break the UI after a redeploy.
+_NO_CACHE = "no-cache, no-store, must-revalidate"
+
+_SPA_PREFIXES = ("/ui", "/frontend")
 
 
-class _ImmutableAssets(StaticFiles):
-    """StaticFiles that marks hashed assets immutable for a year."""
+def _api_prefixes(target_app: FastAPI) -> frozenset[str]:
+    """First path segment of every route registered so far.
 
-    def file_response(self, *args, **kwargs):  # type: ignore[override]
-        resp = super().file_response(*args, **kwargs)
-        resp.headers["Cache-Control"] = _ASSET_IMMUTABLE
-        return resp
+    Called before the SPA routes are added, so the result is exactly the API
+    surface. The catch-all uses it to keep returning 404 for unknown API
+    paths instead of silently answering them with the UI shell.
+    """
+    heads = set()
+    for route in target_app.routes:
+        path = getattr(route, "path", "")
+        head = path.strip("/").split("/", 1)[0]
+        if head and "{" not in head:
+            heads.add(head)
+    return frozenset(heads)
 
 
 def mount_spa(target_app: FastAPI, ui_dir: Path) -> bool:
-    """Register SPA routes that serve ``ui_dir`` at ``/``, ``/ui``, ``/frontend``.
+    """Register routes that serve ``ui_dir`` at ``/``, ``/ui`` and ``/frontend``.
 
     Explicit route handlers are used instead of a ``StaticFiles`` mount so the
     AMP proxy never trips over Starlette's trailing-slash 307 redirect. Returns
     ``True`` when the routes were registered (i.e. ``ui_dir`` exists), so the
-    caller / tests can assert the SPA is being served.
+    caller / tests can assert the UI is being served.
     """
     if not ui_dir.is_dir():
         return False
 
-    def index_response() -> FileResponse:
-        return FileResponse(ui_dir / "index.html", headers={"Cache-Control": _HTML_NO_CACHE})
+    ui_dir = ui_dir.resolve()
+    api_prefixes = _api_prefixes(target_app)
 
-    def spa_serve(full_path: str) -> Response:
-        file = (ui_dir / full_path).resolve()
-        # Guard against path traversal escaping the dist dir.
+    def index_response() -> FileResponse:
+        return FileResponse(ui_dir / "index.html", headers={"Cache-Control": _NO_CACHE})
+
+    def serve(relative_path: str) -> Response:
+        file = (ui_dir / relative_path).resolve()
+        # Guard against path traversal escaping the UI directory.
         if ui_dir in file.parents and file.is_file():
-            headers = {"Cache-Control": _HTML_NO_CACHE} if file.suffix == ".html" else None
-            return FileResponse(file, headers=headers) if headers else FileResponse(file)
+            return FileResponse(file, headers={"Cache-Control": _NO_CACHE})
         return index_response()
 
     @target_app.get("/", include_in_schema=False)
     def _root_index() -> FileResponse:
         return index_response()
 
-    @target_app.api_route("/ui", methods=["GET", "HEAD"], include_in_schema=False)
-    @target_app.api_route("/ui/", methods=["GET", "HEAD"], include_in_schema=False)
-    def _ui_index() -> FileResponse:
+    def spa_index() -> FileResponse:
         return index_response()
 
-    @target_app.api_route("/ui/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
-    def _ui_spa(full_path: str) -> Response:
-        return spa_serve(full_path)
+    def spa_asset(full_path: str) -> Response:
+        return serve(full_path)
 
-    @target_app.api_route("/frontend", methods=["GET", "HEAD"], include_in_schema=False)
-    @target_app.api_route("/frontend/", methods=["GET", "HEAD"], include_in_schema=False)
-    def _frontend_index() -> FileResponse:
-        return index_response()
+    for prefix in _SPA_PREFIXES:
+        for path in (prefix, f"{prefix}/"):
+            target_app.add_api_route(
+                path, spa_index, methods=["GET", "HEAD"], include_in_schema=False
+            )
+        target_app.add_api_route(
+            f"{prefix}/{{full_path:path}}",
+            spa_asset,
+            methods=["GET", "HEAD"],
+            include_in_schema=False,
+        )
 
+    # Registered last so every API route wins. This is what makes relative
+    # asset URLs work when the UI is served at the service root.
     @target_app.api_route(
-        "/frontend/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False
+        "/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False
     )
-    def _frontend_spa(full_path: str) -> Response:
-        return spa_serve(full_path)
+    def _root_spa(full_path: str) -> Response:
+        if full_path.split("/", 1)[0] in api_prefixes:
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return serve(full_path)
 
-    assets_dir = ui_dir / "assets"
-    if assets_dir.is_dir():
-        target_app.mount("/assets", _ImmutableAssets(directory=str(assets_dir)), name="ui_assets")
     return True
 
 
