@@ -13,8 +13,6 @@ build/
 *.xlsx
 !eval_*example*.xlsx
 .DS_Store
-node_modules/
 servicemaker-*
-# Arango BYOC build artifacts (produced by scripts/package-arango-manual.sh)
+# Arango BYOC build artifacts (produced by scripts/package_byoc.sh)
 project.tar.gz
-*-myservice.tar.gz

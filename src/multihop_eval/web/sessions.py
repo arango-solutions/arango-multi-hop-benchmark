@@ -2,7 +2,7 @@
 
 The Streamlit app kept the live :class:`ArangoGateway`, the saved
 :class:`AppConfig`, and the in-flight run on ``st.session_state``. With a
-React SPA + FastAPI backend that state lives server-side, keyed by an opaque
+static UI + FastAPI backend that state lives server-side, keyed by an opaque
 session token the browser sends in the ``X-Arango-Session`` header (or, for
 ``EventSource`` which cannot set headers, a ``session`` query parameter).
 

@@ -2,7 +2,7 @@
 
 Replaces the Streamlit Run tab's thread + queue + poll loop with a
 server-side :class:`RunHandle` per session and a Server-Sent Events stream
-the React tab consumes with ``EventSource``.
+the Run tab consumes with ``EventSource``.
 """
 
 from __future__ import annotations

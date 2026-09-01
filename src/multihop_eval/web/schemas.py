@@ -1,6 +1,6 @@
 """Pydantic request/response models for the web API.
 
-These shape the JSON contract between the React SPA and FastAPI. They are
+These shape the JSON contract between the browser UI and FastAPI. They are
 deliberately separate from the domain models in ``multihop_eval.config`` so
 the wire format can evolve without forcing changes on the pipeline.
 """
