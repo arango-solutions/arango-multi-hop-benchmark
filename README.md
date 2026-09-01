@@ -3,15 +3,14 @@
 Multi-hop QA dataset generation, validation, and rubric-based evaluation
 against an Arango graph corpus, packaged as an
 [Arango BYOC](https://arango.ai/blog/deploy-your-code-your-way-introducing-arango-byoc/)
-service: a React/Vite single-page app served by a FastAPI backend on a single
+service: a no-build HTML/CSS/JS UI served by a FastAPI backend on a single
 port.
 
-> **UI migration in progress.** The UI is being moved from Streamlit to a
-> React/Vite SPA + FastAPI API (`src/multihop_eval/web/` + `ui/`). The
-> **Configure** and **Run** tabs are live in React today; **Dashboard**,
-> **Ad-hoc**, and **RAG Eval** render as "coming soon" placeholders and are
-> being ported incrementally. The underlying generation / rag-eval / exporter
-> modules are unchanged.
+> **No build step.** `static/` ships to the container exactly as it appears in
+> the repo — hand-written CSS and native ES modules, no bundler and no Node.
+> This is what BYOC requires: the platform extracts an archive over a stock
+> `py12base` image and runs the entrypoint, so anything needing compilation
+> would have to be prebuilt and committed.
 
 ## What it does
 
@@ -26,7 +25,7 @@ Given clusters of related documents in Arango, the service:
    (factuality, faithfulness, conciseness, multi-hop genuineness, persona-fit
    by default — fully editable from the UI).
 4. **Persists** to an Arango collection and exports Excel / JSON.
-5. **Visualises** results in a Streamlit dashboard with KPIs, charts, and a
+5. **Visualises** results in a dashboard with KPIs, distribution charts, and a
    filterable QA table.
 
 It also ships an **Ad-hoc** tab for validating an existing question / answer /
@@ -71,42 +70,45 @@ src/multihop_eval/
 │   ├── pipeline.py           #   RagEvalOrchestrator (per-system aggregation)
 │   └── langfuse_sink.py      #   optional human-annotation sink
 ├── exporters/                # Excel + JSON writers (generation + rag_eval)
-└── web/                      # FastAPI: SPA static serving + JSON API
-    ├── service.py            #   app, /health, SPA mounts (/ui, /frontend, /assets)
+└── web/                      # FastAPI: static UI serving + JSON API
+    ├── service.py            #   app, /health, UI routes (/, /ui, /frontend)
     ├── sessions.py           #   per-client session registry (X-Arango-Session)
     ├── run_manager.py        #   background run thread + queue + SSE generator
     ├── schemas.py            #   request/response models
     └── routers/              #   connection / config / run endpoints
 
-ui/                           # React + TypeScript + Vite SPA (built into ui/dist)
-├── src/api/                  #   typed client (apiBase prefix-strip + X-Arango-Session)
-└── src/components/           #   ConnectionPanel / ConfigureTab / RunTab + placeholders
+static/                       # the UI, served verbatim (no build step)
+├── index.html
+├── css/styles.css            #   hand-written CSS, light/dark via :root.dark
+└── js/
+    ├── api.js                #   apiBase() prefix-strip + X-Arango-Session
+    ├── dom.js                #   el()/replace() helpers, no framework
+    ├── app.js                #   tab shell, theme toggle, shared state
+    └── tabs/                 #   one module per tab
 ```
 
 ## Quick start (local)
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), Python 3.12, and Node.js 18+.
+Prerequisites: [uv](https://docs.astral.sh/uv/) and Python 3.12. No Node.
 
 ```bash
 cp .env.example .env
 # Fill in ARANGO_HOST, ARANGO_DB, ARANGO_PASSWORD, LLM_API_KEY at minimum.
 
 ./scripts/run_local.sh
-# Builds the React SPA into ui/dist (first run) then serves on 0.0.0.0:8000.
-# → UI at http://0.0.0.0:8000/ui
+# → UI at http://0.0.0.0:8000/
 ```
 
 The same `main.py` that drives `run_local.sh` is the BYOC entrypoint, so what
 you see locally is exactly what runs in the container.
 
-### Frontend hot-reload (two terminals)
+### Frontend edits
+
+There is no frontend build. Edit a file under `static/` and reload the
+browser. For backend autoreload:
 
 ```bash
-# Terminal 1 — FastAPI backend with autoreload
 uv run uvicorn multihop_eval.web.service:app --reload --port 8000
-
-# Terminal 2 — Vite dev server (proxies /connection, /config, /run to :8000)
-cd ui && npm install && npm run dev   # → http://localhost:5173
 ```
 
 ## Running tests
@@ -117,60 +119,76 @@ uv run pytest          # all unit + integration tests
 uv run ruff check .    # lint
 ```
 
-## Containerising for Arango BYOC
+## Packaging for Arango BYOC
 
-This project is laid out so [ServiceMaker](https://github.com/arangodb/servicemaker)
-can package it without modification. Per the Arango BYOC contract:
-
-* The FastAPI service (React SPA + JSON API) binds to `0.0.0.0:8000` and serves
-  at the root path — see [main.py](main.py). The platform proxy prefix
-  (`/_service/uds/_global/<name>/`) is handled in the browser (Vite
-  `base: "./"` + the client's `apiBase()`), so the container always sees clean
-  root paths.
-* The SPA must be built into `ui/dist` before packaging. The
-  [Dockerfile](Dockerfile) does this in a Node build stage; for ServiceMaker or
-  a manual tarball, run `cd ui && npm ci && npm run build` first so `ui/dist`
-  ships in the artifact.
-* All Python dependencies live in `[project.dependencies]` of
-  [pyproject.toml](pyproject.toml) (no `uv sync --extra` extras at runtime).
-* Python 3.12 is required (`.python-version` and `pyproject.toml` agree).
-
-### ServiceMaker workflow
+The platform does **not** build an image. It starts stock `py12base`,
+downloads your archive, extracts it into `/project`, and runs
+`python $(cat entrypoint)`. So the archive must already contain every
+dependency, compiled for Linux.
 
 ```bash
-# One-time: clone & build ServiceMaker
-git clone https://github.com/arangodb/servicemaker.git
-cd servicemaker
-cargo build --release
-
-# From the multi-hop-eval workspace root:
-# Build the SPA first so ui/dist is included in the artifact:
-(cd ui && npm ci && npm run build)
-
-/path/to/servicemaker/target/release/servicemaker \
-  --name multihop-eval \
-  --project-home . \
-  --port 8000
-
-# The deployable artifact will be at:
-#   target/<run-id>/<project-name>/project.tar.gz
-# Upload that to the Container Manager along with:
-#   - File name      : multihop-eval
-#   - Version        : 1.0.0
-#   - Service URL    : multihop-eval
+./scripts/package_byoc.sh
+# → dist/multihop-eval.tar.gz (~44 MB)
 ```
 
-If you're on Apple Silicon and ServiceMaker pulls an `amd64` base image,
-build the base image natively first:
+Then in **Control Panel → Container Manager → Packages**:
 
-```bash
-cd servicemaker/baseimages
-docker build -f Dockerfile.py12base -t arangodb/py12base:latest .
+| Field | Value |
+| --- | --- |
+| Package | `dist/multihop-eval.tar.gz` |
+| Version | a **new** semantic version (the platform keys packages by name/version) |
+| Base image | `py12base` |
+| Service URL | `multihop-eval` |
+
+After uploading, confirm the reported download size matches the file on disk —
+a stale ~100 KB package means the old version is still being served.
+
+The service is then reachable at:
+
+* DB-scoped: `https://<endpoint>:8529/_service/uds/_db/<db>/multihop-eval/`
+* Global: `https://<endpoint>:8529/_service/uds/_global/multihop-eval/`
+
+### How the archive is built
+
+[scripts/package_byoc.sh](scripts/package_byoc.sh) is a thin wrapper around
+the `arango-byoc` skill's packer at
+[.cursor/skills/arango-byoc/scripts/pack.sh](.cursor/skills/arango-byoc/scripts/pack.sh).
+It stages only `main.py`, `pyproject.toml`, `src/` and `static/`, then lets
+the skill packer vendor the wheels and write the tarball:
+
+```text
+entrypoint                                  # /project/multihop-eval/main.py
+the_venv/lib/python3.12/site-packages/      # cp312 manylinux wheels
+multihop-eval/{main.py,pyproject.toml,src/,static/}
 ```
 
-### Manual containerisation
+Requires `uv`. Does **not** require Docker or Node.
 
-If you'd rather skip ServiceMaker:
+Three constraints are easy to get wrong and are pinned by tests in
+[tests/unit/test_byoc_packaging.py](tests/unit/test_byoc_packaging.py):
+
+* **Wheels target `manylinux_2_28`**, not the skill's default
+  `manylinux_2_17`. Current numpy/pandas/rapidfuzz publish no cp312
+  `manylinux_2_17` wheels, so uv would build them from source and emit macOS
+  binaries that fail with `invalid ELF header` in the pod.
+* **`main.py` prepends `the_venv` to `sys.path` before importing anything
+  third-party.** py12base has no pip and none of our site-packages, so a
+  top-level `import uvicorn` dies with `ModuleNotFoundError: pydantic_core`.
+* **All runtime dependencies live in `[project.dependencies]`** of
+  [pyproject.toml](pyproject.toml) — `uv` does not install optional extras
+  groups when vendoring.
+
+The UI side of the contract is pinned by
+[tests/unit/test_static_assets.py](tests/unit/test_static_assets.py): every
+URL under `static/` must be relative, because the browser sits at
+`/_service/uds/_db/<db>/<app>/` while the container only ever sees the path
+with that prefix stripped. A single leading slash sends the request to the
+Arango coordinator instead of the service.
+
+### Running as a container
+
+The BYOC path above does not use Docker. If you want to run the service as a
+container anyway:
 
 ```bash
 docker build -t multihop-eval:1.0.0 .
