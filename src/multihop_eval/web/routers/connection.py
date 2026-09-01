@@ -80,9 +80,10 @@ def _build_gateway_or_error(session: ServerSession, cfg: ArangoConfig) -> Arango
         session.conn_status = STATUS_ERROR
         session.conn_error = str(exc)
         return None
-    if not gateway.ping():
+    error = gateway.verify_connection()
+    if error is not None:
         session.conn_status = STATUS_ERROR
-        session.conn_error = "Ping failed — credentials or endpoint may be wrong."
+        session.conn_error = error
         return None
     return gateway
 
@@ -152,11 +153,12 @@ def disconnect(session: ServerSession = Depends(get_session)) -> ConnectionStatu
 @router.post("/test", response_model=ConnectionStatus)
 def test_connection(session: ServerSession = Depends(get_session)) -> ConnectionStatus:
     gateway = _require_gateway(session)
-    if gateway.ping():
+    error = gateway.verify_connection()
+    if error is None:
         session.last_tested = datetime.now(UTC).isoformat(timespec="seconds")
     else:
         session.conn_status = STATUS_ERROR
-        session.conn_error = "Ping failed."
+        session.conn_error = error
     return _status(session, _amp_info(session))
 
 

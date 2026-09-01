@@ -2,9 +2,60 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from multihop_eval.web.sessions import SESSION_HEADER
+
+ARANGO_401 = "[HTTP 401][ERR 11] not authorized to execute this request"
+
+
+@pytest.fixture
+def refusing_gateway(patch_gateway):
+    """Make the fake gateway reject the connection with Arango's own message."""
+    patch_gateway.connection_error = ARANGO_401
+    yield patch_gateway
+    patch_gateway.connection_error = None
+
+
+def _connect_body() -> dict[str, str]:
+    return {
+        "mode": "password",
+        "host": "https://arango.example.com",
+        "db": "ingest_bench_db",
+        "username": "root",
+        "password": "secret",
+    }
+
+
+def test_failed_connect_surfaces_the_real_arango_error(
+    client: TestClient, refusing_gateway
+) -> None:
+    """Regression: the router used to replace the 401 with 'Ping failed'.
+
+    That forced the user to read the server log to learn why the connection
+    was rejected.
+    """
+    body = client.post("/connection/connect", json=_connect_body()).json()
+
+    assert body["status"] == "error"
+    assert body["error"] == ARANGO_401
+    assert "Ping failed" not in body["error"]
+
+
+def test_failed_test_endpoint_surfaces_the_real_arango_error(
+    client: TestClient, patch_gateway, connect_manual
+) -> None:
+    token = connect_manual(client)
+    # The credentials stop working after connecting (e.g. a rotated JWT).
+    patch_gateway.connection_error = ARANGO_401
+    try:
+        body = client.post("/connection/test", headers={SESSION_HEADER: token}).json()
+    finally:
+        patch_gateway.connection_error = None
+
+    assert body["status"] == "error"
+    assert body["error"] == ARANGO_401
 
 
 def test_connect_password_mode_succeeds(client: TestClient, patch_gateway, connect_manual) -> None:

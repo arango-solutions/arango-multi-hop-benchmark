@@ -69,6 +69,8 @@ class _FakeDatabase:
     collections_listing: list[dict[str, Any]] = field(default_factory=list)
     databases_listing: list[str] = field(default_factory=list)
     conn: _FakeConnection = field(default_factory=_FakeConnection)
+    # Set to make properties() raise, simulating Arango refusing the request.
+    properties_error: Exception | None = None
 
     def has_collection(self, name: str) -> bool:
         return name in self.existing_collections
@@ -81,6 +83,8 @@ class _FakeDatabase:
         return self.collections_dict.setdefault(name, _FakeCollectionAccess())
 
     def properties(self) -> dict[str, Any]:
+        if self.properties_error is not None:
+            raise self.properties_error
         return {"name": "fakedb"}
 
     def collections(self) -> list[dict[str, Any]]:
@@ -140,6 +144,88 @@ def gateway(cfg, db_obj) -> ArangoGateway:
 def test_ensure_qa_collection_creates_when_missing(gateway, db_obj):
     gateway.ensure_qa_collection()
     assert "qa_test" in db_obj.created_collections
+
+
+# ---------------------------------------------------------------------------
+# verify_connection — the message the user actually sees
+# ---------------------------------------------------------------------------
+
+
+class _ArangoServerError(Exception):
+    """Mimics python-arango's ArangoServerError (which carries http_code)."""
+
+    def __init__(self, http_code: int, message: str) -> None:
+        super().__init__(message)
+        self.http_code = http_code
+
+
+def test_verify_connection_returns_none_when_reachable(gateway):
+    assert gateway.verify_connection() is None
+    assert gateway.ping() is True
+
+
+def test_verify_connection_reports_the_real_arango_message(gateway, db_obj):
+    """Regression: a bare bool forced users to read the server log for a 401."""
+    db_obj.properties_error = _ArangoServerError(
+        401, "[HTTP 401][ERR 11] not authorized to execute this request"
+    )
+
+    error = gateway.verify_connection()
+
+    assert error is not None
+    assert "[HTTP 401][ERR 11] not authorized to execute this request" in error
+    assert gateway.ping() is False
+
+
+def test_401_in_password_mode_names_the_user_and_database(gateway, db_obj):
+    db_obj.properties_error = _ArangoServerError(401, "[HTTP 401][ERR 11] nope")
+
+    error = gateway.verify_connection()
+
+    # A valid user denied one database looks identical to a bad password,
+    # so the hint has to mention both possibilities.
+    assert "'root'" in error
+    assert "'testdb'" in error
+    assert "password" in error
+    assert "granted access" in error
+
+
+def test_401_in_jwt_mode_points_at_the_token_not_a_password(tmp_path, db_obj):
+    token_file = tmp_path / "token"
+    token_file.write_text("a.b.c", encoding="utf-8")
+    cfg = ArangoConfig(
+        host="https://arango.example.com",
+        db="ampdb",
+        auth_mode=AUTH_MODE_JWT,
+        jwt_token_path=str(token_file),
+    )
+    gateway = ArangoGateway(cfg, client=_FakeArangoSDK(db_obj))  # type: ignore[arg-type]
+    db_obj.properties_error = _ArangoServerError(401, "[HTTP 401][ERR 11] nope")
+
+    error = gateway.verify_connection()
+
+    assert str(token_file) in error
+    assert "expired" in error
+    assert "'ampdb'" in error
+    assert "password" not in error
+
+
+def test_non_401_failures_are_passed_through_verbatim(gateway, db_obj):
+    """A 404 or a TLS error must not be dressed up as a credentials problem."""
+    db_obj.properties_error = _ArangoServerError(404, "[HTTP 404][ERR 1228] database not found")
+
+    error = gateway.verify_connection()
+
+    assert error == "[HTTP 404][ERR 1228] database not found"
+    assert "password" not in error
+
+
+def test_connection_errors_without_an_http_code_still_surface(gateway, db_obj):
+    db_obj.properties_error = OSError("[Errno 61] Connection refused")
+
+    error = gateway.verify_connection()
+
+    assert "Connection refused" in error
 
 
 def test_ensure_qa_collection_skips_when_existing(gateway, db_obj):
