@@ -85,7 +85,7 @@ ui/                           # React + TypeScript + Vite SPA (built into ui/dis
 
 ## Quick start (local)
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), Python 3.13, and Node.js 18+.
+Prerequisites: [uv](https://docs.astral.sh/uv/), Python 3.12, and Node.js 18+.
 
 ```bash
 cp .env.example .env
@@ -133,7 +133,7 @@ can package it without modification. Per the Arango BYOC contract:
   ships in the artifact.
 * All Python dependencies live in `[project.dependencies]` of
   [pyproject.toml](pyproject.toml) (no `uv sync --extra` extras at runtime).
-* Python 3.13 is required (`.python-version` and `pyproject.toml` agree).
+* Python 3.12 is required (`.python-version` and `pyproject.toml` agree).
 
 ### ServiceMaker workflow
 
@@ -165,7 +165,7 @@ build the base image natively first:
 
 ```bash
 cd servicemaker/baseimages
-docker build -f Dockerfile.py13base -t arangodb/py13base:latest .
+docker build -f Dockerfile.py12base -t arangodb/py12base:latest .
 ```
 
 ### Manual containerisation

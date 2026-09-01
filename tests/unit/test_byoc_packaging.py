@@ -94,7 +94,7 @@ def test_prepareproject_builds_complete_venv_not_diff_move() -> None:
 
 
 def test_prepareproject_uses_uv_for_arango_base_image() -> None:
-    """arangodb/py13base has no system python3 — the hook must build via uv."""
+    """arangodb/py12base has no system python3 — the hook must build via uv."""
     text = PREPARE_SCRIPT.read_text()
     assert "uv venv" in text, "hook must create the venv with uv (no system python3 in base image)"
     assert "/home/user/.local/bin/env" in text, "hook must source uv onto PATH for 'user'"
@@ -108,7 +108,7 @@ def test_dockerfile_byoc_builds_venv_in_base_image() -> None:
     """
     assert DOCKERFILE_BYOC.is_file(), "Dockerfile.byoc is missing"
     text = DOCKERFILE_BYOC.read_text()
-    assert "arangodb/py13base" in text
+    assert "arangodb/py12base" in text
     assert "prepareproject.sh" in text
     # The venv must be produced as part of the image build.
     assert "RUN /project/scripts/prepareproject.sh" in text

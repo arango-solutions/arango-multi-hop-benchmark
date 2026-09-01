@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------------------
 # Build a COMPLETE, self-contained virtual environment at /project/the_venv so
 # the runtime (base image scripts/entrypoint.sh) can import every dependency
-# via PYTHONPATH=/project/the_venv/lib/python3.13/site-packages.
+# via PYTHONPATH=/project/the_venv/lib/python3.12/site-packages.
 #
 # Why a custom hook (vs ServiceMaker's default prepareproject.sh):
 #   ServiceMaker's default installs deps into the base image venv
@@ -16,9 +16,9 @@
 #   intact and is architecture-correct (the install runs inside the Linux base
 #   image, never copied from a developer's macOS .venv).
 #
-# IMPORTANT: The arangodb/py13base image has NO system `python3` — only `uv`
-# plus a uv-managed 3.13 venv at /home/user/the_venv. So we build the target
-# venv with `uv` and pin it to Python 3.13 (matching the runtime + the
+# IMPORTANT: The arangodb/py12base image has NO system `python3` — only `uv`
+# plus a uv-managed 3.12 venv at /home/user/the_venv. So we build the target
+# venv with `uv` and pin it to Python 3.12 (matching the runtime + the
 # PYTHONPATH the base image's entrypoint.sh exports). A `python3` path is kept
 # as a fallback for non-Arango builders.
 # ============================================================================
@@ -28,7 +28,7 @@ echo "==> multihop-eval prepareproject.sh starting..."
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_PATH="${VENV_PATH:-/project/the_venv}"
-PYTHON_VERSION="${PYTHON_VERSION:-3.13}"
+PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
 REQUIREMENTS="${REPO_ROOT}/requirements.txt"
 
 if [[ ! -f "${REQUIREMENTS}" ]]; then

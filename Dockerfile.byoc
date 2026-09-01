@@ -9,7 +9,7 @@
 # extracts /project into project.tar.gz.
 #
 # Stage 1 builds the React/Vite SPA. Stage 2 lays out /project and builds
-# /project/the_venv via uv (the base image has uv + a 3.13 venv, but no system
+# /project/the_venv via uv (the base image has uv + a 3.12 venv, but no system
 # python3).
 
 # ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: lay out /project and build the self-contained venv
 # ---------------------------------------------------------------------------
-FROM arangodb/py13base:latest
+FROM arangodb/py12base:latest
 
 USER root
 
@@ -44,7 +44,7 @@ RUN printf 'main.py\n' > /project/entrypoint \
 USER user
 WORKDIR /project
 
-# Build a COMPLETE /project/the_venv with all deps (uv, python 3.13).
+# Build a COMPLETE /project/the_venv with all deps (uv, python 3.12).
 RUN /project/scripts/prepareproject.sh
 
 # Drop caches/bytecode so they don't bloat the extracted tarball.
